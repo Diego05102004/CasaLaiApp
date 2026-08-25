@@ -1,0 +1,358 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const DEFAULT_ISSUER = 'http://localhost/Repositorio%20de%20GITHUB/proyecto-casalai-main/proyecto-casalai-ca/';
+const DEFAULT_AUDIENCE = 'proyecto-casalai-ca';
+// Cambia este valor para definir el tiempo de la sesion
+const SESSION_EXPIRATION_SECONDS = 60;
+const WARNING_THRESHOLD_SECONDS = 30;
+const SESSION_EXTENSION_STORAGE_KEY = 'sessionExtensionSeconds';
+
+const normalizeTokenValue = (value) => {
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return trimmed;
+  }
+
+  try {
+    return decodeURIComponent(trimmed.replace(/\+/g, '%20'));
+  } catch (error) {
+    return trimmed;
+  }
+};
+
+const buildDebugInfo = (token, payload, reason, options = {}) => ({
+  tokenPreview: token ? `${token.slice(0, 24)}...` : null,
+  tokenLength: token ? token.length : 0,
+  tokenParts: token ? token.split('.').length : 0,
+  payload,
+  reason,
+  expectedIssuer: options.issuer || DEFAULT_ISSUER,
+  expectedAudience: options.audience || DEFAULT_AUDIENCE,
+  receivedIssuer: payload?.iss || null,
+  receivedAudience: payload?.aud || null,
+  exp: payload?.exp || null,
+  iat: payload?.iat || null,
+});
+
+const base64UrlDecode = (value) => {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), '=');
+
+    if (typeof globalThis.atob === 'function') {
+      const decoded = globalThis.atob(padded);
+      return decodeURIComponent(
+        decoded
+          .split('')
+          .map((char) => `%${`00${char.charCodeAt(0).toString(16)}`.slice(-2)}`)
+          .join('')
+      );
+    }
+
+    if (typeof Buffer !== 'undefined') {
+      return Buffer.from(padded, 'base64').toString('utf8');
+    }
+
+    return null;
+  } catch (error) {
+    console.warn('No se pudo decodificar el token JWT:', error);
+    return null;
+  }
+};
+
+export const decodeJwtPayload = (token) => {
+  if (!token || typeof token !== 'string') {
+    return { payload: null, debug: buildDebugInfo(token, null, 'token missing') };
+  }
+
+  const trimmedToken = token.trim();
+  const normalizedToken = trimmedToken.startsWith('Bearer ')
+    ? trimmedToken.replace(/^Bearer\s+/i, '').trim()
+    : trimmedToken;
+  const parts = normalizedToken.split('.');
+
+  if (parts.length < 2) {
+    return {
+      payload: null,
+      debug: buildDebugInfo(normalizedToken, null, 'token malformed'),
+    };
+  }
+
+  const payload = base64UrlDecode(parts[1]);
+  if (!payload) {
+    return {
+      payload: null,
+      debug: buildDebugInfo(normalizedToken, null, 'payload decode failed'),
+    };
+  }
+
+  try {
+    return {
+      payload: JSON.parse(payload),
+      debug: buildDebugInfo(normalizedToken, JSON.parse(payload), 'payload decoded'),
+    };
+  } catch (error) {
+    console.warn('[JWT][debug] El payload del JWT no es un JSON válido:', error);
+    return {
+      payload: null,
+      debug: buildDebugInfo(normalizedToken, null, 'payload parse failed'),
+    };
+  }
+};
+
+export const getJwtStatus = (token, options = {}) => {
+  if (!token) {
+    return {
+      status: 'missing',
+      payload: null,
+      expiresIn: null,
+      expiresAt: null,
+      debug: buildDebugInfo(token, null, 'token missing', options),
+    };
+  }
+
+  const { payload, debug: decodeDebug } = decodeJwtPayload(token);
+  const issuer = options.issuer || DEFAULT_ISSUER;
+  const audience = options.audience || DEFAULT_AUDIENCE;
+  const warningThreshold = options.warningThresholdSeconds ?? WARNING_THRESHOLD_SECONDS;
+  const extensionSeconds = Number(options.extensionSeconds || 0);
+
+  if (!payload) {
+    const debug = {
+      ...decodeDebug,
+      expectedIssuer: issuer,
+      expectedAudience: audience,
+      reason: decodeDebug?.reason || 'payload missing',
+    };
+
+    console.log('[JWT][debug] validación fallida', debug);
+
+    return {
+      status: 'warning',
+      payload: null,
+      expiresIn: null,
+      expiresAt: null,
+      debug,
+    };
+  }
+
+  const normalizedIssuer = normalizeTokenValue(payload.iss);
+  const normalizedExpectedIssuer = normalizeTokenValue(issuer);
+  const normalizedAudience = normalizeTokenValue(payload.aud);
+  const normalizedExpectedAudience = normalizeTokenValue(audience);
+
+  const issuerMismatch = Boolean(payload.iss && normalizedIssuer && normalizedExpectedIssuer && normalizedIssuer !== normalizedExpectedIssuer);
+  const audienceMismatch = Boolean(payload.aud && normalizedAudience && normalizedExpectedAudience && normalizedAudience !== normalizedExpectedAudience);
+
+  const debug = {
+    ...decodeDebug,
+    expectedIssuer: issuer,
+    expectedAudience: audience,
+    receivedIssuer: payload.iss || null,
+    receivedAudience: payload.aud || null,
+    issuerMismatch,
+    audienceMismatch,
+  };
+
+  if (issuerMismatch || audienceMismatch) {
+    console.warn('[JWT][debug] coincidencia de issuer/audience diferente, se continuará con la validación como advertencia', debug);
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  const expiresAt = payload.exp !== undefined && payload.exp !== null ? Number(payload.exp) : null;
+  const issuedAt = payload.iat !== undefined && payload.iat !== null ? Number(payload.iat) : now;
+  const fallbackExpiration = issuedAt + SESSION_EXPIRATION_SECONDS;
+  const effectiveExpiresAt = expiresAt !== null && !Number.isNaN(expiresAt)
+    ? Math.min(expiresAt, fallbackExpiration)
+    : fallbackExpiration;
+  const adjustedExpiresAt = effectiveExpiresAt + extensionSeconds;
+  const expiresIn = adjustedExpiresAt - now;
+
+  if (!expiresAt || Number.isNaN(expiresAt)) {
+    console.warn('[JWT][debug] no se encontró exp válido', debug);
+    return {
+      status: 'warning',
+      payload,
+      expiresIn: null,
+      expiresAt: null,
+      debug: { ...debug, reason: 'missing exp' },
+    };
+  }
+
+  if (expiresIn <= 0) {
+    const result = {
+      status: 'expired',
+      payload: null,
+      expiresIn: 0,
+      expiresAt: adjustedExpiresAt,
+      debug: { ...debug, reason: 'token expired', expiresIn },
+    };
+    console.log('[JWT][debug] token expirado', result.debug);
+    return result;
+  }
+
+  if (expiresIn <= warningThreshold) {
+    const result = {
+      status: 'warning',
+      payload,
+      expiresIn,
+      expiresAt: adjustedExpiresAt,
+      debug: { ...debug, reason: 'token near expiry', expiresIn },
+    };
+    console.log('[JWT][debug] token próximo a expirar', result.debug);
+    return result;
+  }
+
+  const result = {
+    status: 'valid',
+    payload,
+    expiresIn,
+    expiresAt: adjustedExpiresAt,
+    debug: { ...debug, reason: 'token valid', expiresIn },
+  };
+  console.log('[JWT][debug] token válido', result.debug);
+  return result;
+};
+
+export const getStoredToken = async () => {
+  try {
+    return await AsyncStorage.getItem('userToken');
+  } catch (error) {
+    console.warn('No se pudo leer el token almacenado:', error);
+    return null;
+  }
+};
+
+export const getStoredUserData = async () => {
+  try {
+    const storedUser = await AsyncStorage.getItem('userData');
+    return storedUser ? JSON.parse(storedUser) : null;
+  } catch (error) {
+    console.warn('No se pudo leer la información de usuario almacenada:', error);
+    return null;
+  }
+};
+
+export const getStoredSessionExtensionSeconds = async () => {
+  try {
+    const storedValue = await AsyncStorage.getItem(SESSION_EXTENSION_STORAGE_KEY);
+    return storedValue ? Number(storedValue) : 0;
+  } catch (error) {
+    console.warn('No se pudo leer la extensión de sesión:', error);
+    return 0;
+  }
+};
+
+export const extendStoredSession = async (seconds = 60) => {
+  try {
+    const currentValue = await getStoredSessionExtensionSeconds();
+    const nextValue = Math.max(0, currentValue + seconds);
+    await AsyncStorage.setItem(SESSION_EXTENSION_STORAGE_KEY, String(nextValue));
+    return nextValue;
+  } catch (error) {
+    console.warn('No se pudo extender la sesión:', error);
+    return 0;
+  }
+};
+
+export const persistAuthSession = async ({ token, user, payload }) => {
+  try {
+    if (token) {
+      await AsyncStorage.setItem('userToken', token);
+    }
+
+    if (user) {
+      await AsyncStorage.setItem('userData', JSON.stringify(user));
+    }
+
+    if (payload) {
+      await AsyncStorage.setItem('jwtPayload', JSON.stringify(payload));
+    }
+
+    await AsyncStorage.setItem(SESSION_EXTENSION_STORAGE_KEY, '0');
+  } catch (error) {
+    console.warn('No se pudo guardar la sesión autenticada:', error);
+  }
+};
+
+export const clearStoredAuthSession = async () => {
+  try {
+    await AsyncStorage.removeItem('userToken');
+    await AsyncStorage.removeItem('userData');
+    await AsyncStorage.removeItem('jwtPayload');
+    await AsyncStorage.removeItem(SESSION_EXTENSION_STORAGE_KEY);
+  } catch (error) {
+    console.warn('No se pudo limpiar la sesión almacenada:', error);
+  }
+};
+
+export const validateStoredSession = async (options = {}) => {
+  const token = await getStoredToken();
+  const user = await getStoredUserData();
+  const extensionSeconds = await getStoredSessionExtensionSeconds();
+  const sessionStatus = getJwtStatus(token, { ...options, extensionSeconds });
+
+  const isAuthenticated = Boolean(token && user && ['valid', 'warning'].includes(sessionStatus.status));
+
+  return {
+    isAuthenticated,
+    token,
+    user,
+    tokenStatus: sessionStatus.status,
+    expiresIn: sessionStatus.expiresIn,
+    expiresAt: sessionStatus.expiresAt,
+    jwtPayload: sessionStatus.payload,
+    debug: sessionStatus.debug,
+  };
+};
+
+export const refreshStoredSession = async (options = {}) => {
+  const token = await getStoredToken();
+  const user = await getStoredUserData();
+  const extensionSeconds = await getStoredSessionExtensionSeconds();
+  const sessionStatus = getJwtStatus(token, { ...options, extensionSeconds });
+
+  if (!token || !user || !['valid', 'warning'].includes(sessionStatus.status)) {
+    await clearStoredAuthSession();
+    return {
+      isAuthenticated: false,
+      token: null,
+      user: null,
+      tokenStatus: sessionStatus.status,
+      expiresIn: sessionStatus.expiresIn,
+      expiresAt: sessionStatus.expiresAt,
+      jwtPayload: sessionStatus.payload,
+      debug: sessionStatus.debug,
+    };
+  }
+
+  return {
+    isAuthenticated: true,
+    token,
+    user,
+    tokenStatus: sessionStatus.status,
+    expiresIn: sessionStatus.expiresIn,
+    expiresAt: sessionStatus.expiresAt,
+    jwtPayload: sessionStatus.payload,
+    debug: sessionStatus.debug,
+  };
+};
+
+export default {
+  decodeJwtPayload,
+  getJwtStatus,
+  getStoredToken,
+  getStoredUserData,
+  persistAuthSession,
+  clearStoredAuthSession,
+  validateStoredSession,
+  refreshStoredSession,
+};
