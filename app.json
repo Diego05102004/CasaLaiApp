@@ -4,11 +4,11 @@
     "slug": "casa-lai",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./src/assets/images/LOGO.png",
     "scheme": "casalai",
     "userInterfaceStyle": "automatic",
     "splash": {
-      "image": "./assets/images/splash.png",
+      "image": "./src/assets/images/LOGO.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -23,7 +23,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "foregroundImage": "./src/assets/images/LOGO.png",
         "backgroundColor": "#FFFFFF"
       },
       "intentFilters": [
@@ -44,12 +44,15 @@
       "package": "com.casalai.app"
     },
     "web": {
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./src/assets/images/LOGO.png"
     },
     "extra": {
       "eas": {
         "projectId": "e156525a-c8a5-4641-9f52-963273975099"
       }
-    }
+    },
+    "plugins": [
+      "expo-font"
+    ]
   }
 }
