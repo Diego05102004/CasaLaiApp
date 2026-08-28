@@ -243,6 +243,31 @@ export const getStoredUserData = async () => {
   }
 };
 
+export const getUserIdentity = (user = {}, payload = null) => {
+  const source = {
+    ...(user || {}),
+    ...(payload || {}),
+  };
+
+  const cedula =
+    source.cedula ??
+    source.cedula_usuario ??
+    source.documento ??
+    source.dni ??
+    source.ci ??
+    source.id_documento ??
+    null;
+
+  return {
+    cedula,
+    documento: source.documento ?? cedula ?? null,
+    email: source.email ?? source.correo ?? source.mail ?? null,
+    nombre: source.nombre ?? source.name ?? source.nombre_usuario ?? source.username ?? null,
+    username: source.username ?? source.nombre_usuario ?? source.user_name ?? null,
+    id: source.id ?? source.id_usuario ?? source.user_id ?? null,
+  };
+};
+
 export const getStoredSessionExtensionSeconds = async () => {
   try {
     const storedValue = await AsyncStorage.getItem(SESSION_EXTENSION_STORAGE_KEY);
@@ -267,16 +292,33 @@ export const extendStoredSession = async (seconds = 6000) => {
 
 export const persistAuthSession = async ({ token, user, payload }) => {
   try {
+    const resolvedPayload = payload || (token ? decodeJwtPayload(token).payload : null);
+    const resolvedUser = user
+      ? {
+          ...user,
+          ...getUserIdentity(user, resolvedPayload),
+          cedula: user?.cedula ?? user?.cedula_usuario ?? user?.documento ?? resolvedPayload?.cedula ?? resolvedPayload?.cedula_usuario ?? resolvedPayload?.documento ?? null,
+          documento: user?.documento ?? user?.cedula ?? user?.cedula_usuario ?? resolvedPayload?.documento ?? resolvedPayload?.cedula ?? resolvedPayload?.cedula_usuario ?? null,
+          email: user?.email ?? user?.correo ?? user?.mail ?? resolvedPayload?.email ?? resolvedPayload?.correo ?? null,
+        }
+      : user;
+
+    console.log('[jwt] persistAuthSession:', {
+      tokenPreview: token ? `${token.slice(0, 24)}...` : null,
+      user: resolvedUser,
+      payload: resolvedPayload,
+    });
+
     if (token) {
       await AsyncStorage.setItem('userToken', token);
     }
 
-    if (user) {
-      await AsyncStorage.setItem('userData', JSON.stringify(user));
+    if (resolvedUser) {
+      await AsyncStorage.setItem('userData', JSON.stringify(resolvedUser));
     }
 
-    if (payload) {
-      await AsyncStorage.setItem('jwtPayload', JSON.stringify(payload));
+    if (resolvedPayload) {
+      await AsyncStorage.setItem('jwtPayload', JSON.stringify(resolvedPayload));
     }
 
     await AsyncStorage.setItem(SESSION_EXTENSION_STORAGE_KEY, '0');
@@ -298,9 +340,19 @@ export const clearStoredAuthSession = async () => {
 
 export const validateStoredSession = async (options = {}) => {
   const token = await getStoredToken();
-  const user = await getStoredUserData();
+  const storedUser = await getStoredUserData();
+  const storedPayload = await AsyncStorage.getItem('jwtPayload');
+  const payload = storedPayload ? JSON.parse(storedPayload) : (token ? decodeJwtPayload(token).payload : null);
   const extensionSeconds = await getStoredSessionExtensionSeconds();
   const sessionStatus = getJwtStatus(token, { ...options, extensionSeconds });
+  const user = storedUser
+    ? {
+        ...storedUser,
+        ...getUserIdentity(storedUser, sessionStatus.payload || payload),
+        cedula: storedUser?.cedula ?? storedUser?.cedula_usuario ?? storedUser?.documento ?? sessionStatus.payload?.cedula ?? sessionStatus.payload?.cedula_usuario ?? sessionStatus.payload?.documento ?? payload?.cedula ?? payload?.cedula_usuario ?? payload?.documento ?? null,
+        documento: storedUser?.documento ?? storedUser?.cedula ?? storedUser?.cedula_usuario ?? sessionStatus.payload?.documento ?? sessionStatus.payload?.cedula ?? sessionStatus.payload?.cedula_usuario ?? payload?.documento ?? payload?.cedula ?? payload?.cedula_usuario ?? null,
+      }
+    : null;
 
   const isAuthenticated = Boolean(token && user && ['valid', 'warning'].includes(sessionStatus.status));
 
@@ -311,16 +363,26 @@ export const validateStoredSession = async (options = {}) => {
     tokenStatus: sessionStatus.status,
     expiresIn: sessionStatus.expiresIn,
     expiresAt: sessionStatus.expiresAt,
-    jwtPayload: sessionStatus.payload,
+    jwtPayload: sessionStatus.payload || payload,
     debug: sessionStatus.debug,
   };
 };
 
 export const refreshStoredSession = async (options = {}) => {
   const token = await getStoredToken();
-  const user = await getStoredUserData();
+  const storedUser = await getStoredUserData();
+  const storedPayload = await AsyncStorage.getItem('jwtPayload');
+  const payload = storedPayload ? JSON.parse(storedPayload) : (token ? decodeJwtPayload(token).payload : null);
   const extensionSeconds = await getStoredSessionExtensionSeconds();
   const sessionStatus = getJwtStatus(token, { ...options, extensionSeconds });
+  const user = storedUser
+    ? {
+        ...storedUser,
+        ...getUserIdentity(storedUser, sessionStatus.payload || payload),
+        cedula: storedUser?.cedula ?? storedUser?.cedula_usuario ?? storedUser?.documento ?? sessionStatus.payload?.cedula ?? sessionStatus.payload?.cedula_usuario ?? sessionStatus.payload?.documento ?? payload?.cedula ?? payload?.cedula_usuario ?? payload?.documento ?? null,
+        documento: storedUser?.documento ?? storedUser?.cedula ?? storedUser?.cedula_usuario ?? sessionStatus.payload?.documento ?? sessionStatus.payload?.cedula ?? sessionStatus.payload?.cedula_usuario ?? payload?.documento ?? payload?.cedula ?? payload?.cedula_usuario ?? null,
+      }
+    : null;
 
   if (!token || !user || !['valid', 'warning'].includes(sessionStatus.status)) {
     await clearStoredAuthSession();
@@ -331,7 +393,7 @@ export const refreshStoredSession = async (options = {}) => {
       tokenStatus: sessionStatus.status,
       expiresIn: sessionStatus.expiresIn,
       expiresAt: sessionStatus.expiresAt,
-      jwtPayload: sessionStatus.payload,
+      jwtPayload: sessionStatus.payload || payload,
       debug: sessionStatus.debug,
     };
   }
@@ -343,7 +405,7 @@ export const refreshStoredSession = async (options = {}) => {
     tokenStatus: sessionStatus.status,
     expiresIn: sessionStatus.expiresIn,
     expiresAt: sessionStatus.expiresAt,
-    jwtPayload: sessionStatus.payload,
+    jwtPayload: sessionStatus.payload || payload,
     debug: sessionStatus.debug,
   };
 };

@@ -56,6 +56,8 @@ const MenuScreen = () => {
                   navigation.navigate('Catalog');
                 } else if (item.id === '2') {
                   navigation.navigate('Profile');
+                } else if (item.id === '3') {
+                  navigation.navigate('Pedidos');
                 }
               }}
             >

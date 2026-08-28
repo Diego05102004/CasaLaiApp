@@ -5,6 +5,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { useSelector } from 'react-redux';
 import HomeStack from './HomeStack';
 import CartScreen from '../screens/main/CartScreen';
+import PedidosScreen from '../screens/main/PedidosScreen';
 import COLORS from '../constants/colors';
 import theme from '../constants/theme';
 
@@ -76,7 +77,7 @@ const BottomTabNavigator = () => {
       })}
     >
       <Tab.Screen name="Inicio" component={HomeStack} />
-      <Tab.Screen name="Pedidos" component={CartScreen} />
+      <Tab.Screen name="Pedidos" component={PedidosScreen} />
       <Tab.Screen name="Carrito" component={CartScreen} />
     </Tab.Navigator>
   );

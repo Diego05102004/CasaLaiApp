@@ -5,6 +5,7 @@ import { sanitizeForAPI } from '../../sanitization';
 import { InvocarMetodo } from '../../utils/comunicadorApi';
 import {
   clearStoredAuthSession,
+  decodeJwtPayload,
   extendStoredSession,
   persistAuthSession,
   refreshStoredSession,
@@ -96,6 +97,16 @@ const isUserLockedOut = async () => {
   }
 };
 
+const pickFirstDefined = (...values) => {
+  for (const value of values) {
+    if (value !== undefined && value !== null && value !== '') {
+      return value;
+    }
+  }
+
+  return '';
+};
+
 export const loginUser = createAsyncThunk(
   'auth/login',
   async (userData, { rejectWithValue }) => {
@@ -146,19 +157,78 @@ export const loginUser = createAsyncThunk(
       const response = await InvocarMetodo('login.php', 'login', apiData);
 
       if (response.status === 'success') {
+        const rawUser = response.data?.user || response.data?.usuario || response.data?.cliente || {};
+        const token = pickFirstDefined(response.data?.token, response.token, '');
+        const payload = response.data?.payload || (token ? decodeJwtPayload(token).payload : null);
+
         const user = {
-          id: response.data.user.id_usuario,
-          email: userData.email || userData.username,
-          name: response.data.user.username,
-          username: response.data.user.username,
-          role: response.data.user.nombre_rol,
-          token: response.data.token
+          id: pickFirstDefined(rawUser.id_usuario, rawUser.id, payload?.id_usuario, payload?.sub, null),
+          email: pickFirstDefined(
+            rawUser.correo,
+            rawUser.email,
+            userData.email,
+            userData.username,
+            payload?.email,
+            payload?.correo,
+            ''
+          ),
+          correo: pickFirstDefined(
+            rawUser.correo,
+            rawUser.email,
+            userData.email,
+            userData.username,
+            payload?.email,
+            payload?.correo,
+            ''
+          ),
+          name: pickFirstDefined(
+            rawUser.nombre,
+            rawUser.name,
+            rawUser.username,
+            rawUser.nombre_usuario,
+            payload?.nombre,
+            ''
+          ),
+          username: pickFirstDefined(
+            rawUser.username,
+            rawUser.nombre_usuario,
+            userData.username,
+            userData.email,
+            payload?.username,
+            ''
+          ),
+          role: pickFirstDefined(rawUser.nombre_rol, rawUser.role, payload?.rol, payload?.role, ''),
+          cedula: pickFirstDefined(
+            rawUser.cedula,
+            rawUser.cedula_usuario,
+            rawUser.documento,
+            payload?.cedula,
+            payload?.cedula_usuario,
+            payload?.documento,
+            ''
+          ),
+          documento: pickFirstDefined(
+            rawUser.documento,
+            rawUser.cedula,
+            rawUser.cedula_usuario,
+            payload?.documento,
+            payload?.cedula,
+            payload?.cedula_usuario,
+            ''
+          ),
+          token,
         };
+
+        console.log('[auth/login] datos reconstruidos desde login:', {
+          user,
+          payload,
+          rawUser,
+        });
         
         await persistAuthSession({
           token: user.token,
           user,
-          payload: response.data?.payload || null,
+          payload,
         });
         
         // Resetear intentos de login exitoso

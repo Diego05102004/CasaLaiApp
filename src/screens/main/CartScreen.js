@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, Image, TouchableOpacity, ScrollView, TextInput } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Image, TouchableOpacity, ScrollView, TextInput, Alert, ActivityIndicator, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useSelector, useDispatch } from 'react-redux';
@@ -8,14 +8,18 @@ import COLORS from '../../constants/colors';
 import theme from '../../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import MenuModal from '../../components/common/MenuModal';
+import { securePost } from '../../utils/api';
 
 const CartScreen = () => {
   const navigation = useNavigation();
   const dispatch = useDispatch();
   const { items, total } = useSelector(state => state.cart);
+  const { user, jwtPayload } = useSelector(state => state.auth);
 
   // Estado para el modal del menú
   const [menuVisible, setMenuVisible] = useState(false);
+  const [isCreatingOrder, setIsCreatingOrder] = useState(false);
+  const [successModalVisible, setSuccessModalVisible] = useState(false);
 
   const handleRemoveFromCart = (productId) => {
     dispatch(removeFromCart(productId));
@@ -48,6 +52,137 @@ const CartScreen = () => {
 
   const handleClearCart = () => {
     dispatch(clearCart());
+  };
+
+  const handleCreateOrder = async () => {
+    if (!items || items.length === 0) {
+      Alert.alert('Carrito vacío', 'Debes agregar productos antes de generar un pedido.');
+      return;
+    }
+
+    const sourceUser = {
+      ...(user || {}),
+      ...(jwtPayload || {}),
+      ...(user?.cliente || {}),
+      ...(user?.usuario || {}),
+    };
+
+    const cedulaUsuario = String(
+      sourceUser.cedula ||
+      sourceUser.cedula_usuario ||
+      sourceUser.documento ||
+      sourceUser.dni ||
+      sourceUser.ci ||
+      sourceUser.id_documento ||
+      user?.cedula ||
+      user?.documento ||
+      jwtPayload?.cedula ||
+      jwtPayload?.documento ||
+      jwtPayload?.cedula_usuario ||
+      ''
+    ).trim();
+
+    if (!cedulaUsuario) {
+      console.warn('[Cart] cédula no encontrada en user/jwtPayload:', { user, jwtPayload });
+      Alert.alert('No se pudo identificar al cliente', 'Inicia sesión nuevamente para continuar.');
+      return;
+    }
+
+    const formData = new URLSearchParams();
+    formData.append('funcion', 'facturaIngresarMovil');
+    formData.append('cliente', cedulaUsuario);
+    formData.append('cedula', cedulaUsuario);
+    formData.append('fecha', new Date().toISOString().slice(0, 10));
+    formData.append('descuento', '0');
+    formData.append('estatus', 'Borrador');
+    formData.append('total', String(Number(total || 0)));
+
+    items.forEach((item, index) => {
+      const productId = Number(item.id);
+      const quantity = Number(item.quantity) || 1;
+
+      formData.append('id_producto[]', String(productId));
+      formData.append(`id_producto[${index}]`, String(productId));
+      formData.append('cantidad[]', String(quantity));
+      formData.append(`cantidad[${index}]`, String(quantity));
+
+      if (item.name) {
+        formData.append(`producto[${index}]`, String(item.name));
+      }
+      if (item.price) {
+        formData.append(`precio[${index}]`, String(Number(item.price || 0)));
+      }
+    });
+
+    try {
+      setIsCreatingOrder(true);
+
+      const apiUrl = 'http://localhost/Repositorio%20de%20GITHUB/proyecto-casalai-main/proyecto-casalai-ca/api/gestionarFactura.php';
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        },
+        body: formData.toString(),
+      });
+
+      const responseText = await response.text();
+      let responseData = {};
+
+      try {
+        responseData = responseText ? JSON.parse(responseText) : {};
+      } catch (error) {
+        responseData = {};
+      }
+
+      const rawMessage = [
+        responseData?.message,
+        responseData?.mensaje,
+        responseData?.resultado,
+        responseData?.status,
+        responseText,
+      ].filter(Boolean).join(' ');
+
+      const normalizedMessage = String(rawMessage).toLowerCase();
+      const success =
+        response.ok && (
+          responseData?.status === 'success' ||
+          responseData?.result === 'success' ||
+          responseData?.resultado === 'success' ||
+          responseData?.success === true ||
+          responseData?.estado === 'success' ||
+          /operacion|operación|exitosa|exito|éxito|correctamente|registrado|guardado|generado|pedido/i.test(normalizedMessage)
+        );
+
+      if (!success) {
+        const message =
+          responseData?.message ||
+          responseData?.mensaje ||
+          responseData?.resultado ||
+          responseText ||
+          'No se pudo registrar el pedido.';
+
+        Alert.alert('Pedido no registrado', message);
+        return;
+      }
+
+      dispatch(clearCart());
+      console.log('[Cart] Pedido creado correctamente. Respuesta del backend:', {
+        responseStatus: response.status,
+        responseData,
+        normalizedMessage,
+      });
+      setSuccessModalVisible(true);
+    } catch (error) {
+      console.error('[Cart] Error al crear pedido:', error);
+      Alert.alert(
+        'Error al registrar pedido',
+        error?.message || 'No se pudo crear el pedido en este momento.'
+      );
+    } finally {
+      setIsCreatingOrder(false);
+    }
   };
 
   const renderItem = ({ item }) => {
@@ -120,7 +255,7 @@ const CartScreen = () => {
     );
   };
 
-  if (items.length === 0) {
+  if (items.length === 0 && !successModalVisible) {
     return (
       <View style={styles.emptyContainer}>
         <Ionicons name="cart-outline" size={64} color={COLORS.primary} />
@@ -155,10 +290,15 @@ const CartScreen = () => {
             <Text style={styles.totalAmount}>${total.toFixed(2)}</Text>
           </View>
           <TouchableOpacity
-            style={styles.checkoutButton}
-            onPress={() => navigation.navigate('Payment')}
+            style={[styles.checkoutButton, isCreatingOrder && styles.checkoutButtonDisabled]}
+            onPress={handleCreateOrder}
+            disabled={isCreatingOrder}
           >
-            <Text style={styles.checkoutButtonText}>Pagar ahora</Text>
+            {isCreatingOrder ? (
+              <ActivityIndicator color={COLORS.white} size="small" />
+            ) : (
+              <Text style={styles.checkoutButtonText}>Generar pedido</Text>
+            )}
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -176,6 +316,45 @@ const CartScreen = () => {
         visible={menuVisible}
         onClose={() => setMenuVisible(false)}
       />
+
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={successModalVisible}
+        onRequestClose={() => setSuccessModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.successModalCard}>
+            <Ionicons name="checkmark-circle" size={52} color={COLORS.success || '#22c55e'} />
+            <Text style={styles.successTitle}>Pedido generado</Text>
+            <Text style={styles.successText}>
+              Enhorabuena Estimado Usuario su pedido acaba de ser generado correctamente, puede pagar el pedido en la seccion de Pedidos.
+            </Text>
+            <Text style={styles.successNote}>
+              Nota: si el pedido no es pagado en un plazo de 24 horas despues de su creacion el pedido quedara Anulado
+            </Text>
+
+            <View style={styles.successActions}>
+              <TouchableOpacity
+                style={styles.successPrimaryButton}
+                onPress={() => {
+                  setSuccessModalVisible(false);
+                  navigation.navigate('Pedidos');
+                }}
+              >
+                <Text style={styles.successPrimaryText}>Ver pedidos</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.successSecondaryButton}
+                onPress={() => setSuccessModalVisible(false)}
+              >
+                <Text style={styles.successSecondaryText}>Quedarme aquí</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </>
   );
 };
@@ -363,6 +542,74 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     zIndex: 1000,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  successModalCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  successTitle: {
+    marginTop: 12,
+    fontSize: 24,
+    fontWeight: '700',
+    color: COLORS.primary,
+    textAlign: 'center',
+  },
+  successText: {
+    marginTop: 12,
+    fontSize: 15,
+    lineHeight: 22,
+    color: COLORS.text,
+    textAlign: 'center',
+  },
+  successNote: {
+    marginTop: 12,
+    fontSize: 13,
+    lineHeight: 20,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+  },
+  successActions: {
+    width: '100%',
+    marginTop: 20,
+    gap: 10,
+  },
+  successPrimaryButton: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  successPrimaryText: {
+    color: COLORS.white,
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  successSecondaryButton: {
+    backgroundColor: '#F3F4F6',
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  successSecondaryText: {
+    color: COLORS.text,
+    fontWeight: '600',
+    fontSize: 15,
   },
 });
 
