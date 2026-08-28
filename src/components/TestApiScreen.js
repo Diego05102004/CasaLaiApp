@@ -6,8 +6,8 @@ const TestApiScreen = () => {
   const [loading, setLoading] = useState(false);
   const [respuesta, setRespuesta] = useState(null);
 
-  // REEMPLAZA CON LA URL DE TU HOSTING REAL
-  const API_URL = 'http://192.168.1.109/proyecto-casalai-ca/api/test_ping.php';
+  // REEMPLAZA CON LA URL DE TU HOSTING REAL O DE LOCALTUNNEL
+  const API_URL = 'https://spotty-sites-beg.loca.lt/proyecto-casalai-ca/api/test_ping.php';
 
   const enviarPeticionHTTPS = async () => {
     setLoading(true);
@@ -20,6 +20,7 @@ const TestApiScreen = () => {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
           'User-Agent': 'CasaLaiApp/1.0',
+          'Bypass-Tunnel-Reminder': 'true', // <-- CABECERA AGREGADA PARA LOCALTUNNEL
         },
         body: JSON.stringify({
           mensaje: 'Mensaje de prueba enviado desde CasaLaiApp (APK)',
