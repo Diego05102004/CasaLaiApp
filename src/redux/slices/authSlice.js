@@ -2,7 +2,7 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { validateEmail, validatePassword } from '../../utils/validation';
 import { sanitizeForAPI } from '../../sanitization';
-import { securePost, API_SCHEMAS } from '../../utils/api';
+import { InvocarMetodo } from '../../utils/comunicadorApi';
 import {
   clearStoredAuthSession,
   extendStoredSession,
@@ -143,7 +143,7 @@ export const loginUser = createAsyncThunk(
         ? { email: userData.email, password: userData.password }
         : { username: userData.username, password: userData.password };
 
-      const response = await securePost('/login.php', apiData, API_SCHEMAS.login);
+      const response = await InvocarMetodo('login.php', 'login', apiData);
 
       if (response.status === 'success') {
         const user = {

@@ -76,6 +76,7 @@ const BottomTabNavigator = () => {
       })}
     >
       <Tab.Screen name="Inicio" component={HomeStack} />
+      <Tab.Screen name="Pedidos" component={CartScreen} />
       <Tab.Screen name="Carrito" component={CartScreen} />
     </Tab.Navigator>
   );

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { InvocarMetodo } from '../utils/comunicadorApi';
 
 // Mapeo de imágenes de productos
 const productImages = {
@@ -17,6 +18,26 @@ const productImages = {
 const getProductImage = (imageName) => {
   return productImages[imageName] || productImages['default'];
 };
+
+const adaptProduct = (product) => ({
+  ...product,
+  id: product.id,
+  name: product.nombre,
+  description: product.descripcion || '',
+  price: Number(product.precio) || 0,
+  category: product.categoria_nombre || String(product.categoria_id || 'otros'),
+  image: product.imagen || null,
+  imageSource: product.imagen ? { uri: product.imagen } : getProductImage(product.image),
+});
+
+const groupProductsByCategory = (products) => products.reduce((groups, product) => {
+  const category = product.category.toLowerCase();
+  if (!groups[category]) {
+    groups[category] = [];
+  }
+  groups[category].push(product);
+  return groups;
+}, {});
 
 const sampleProducts = {
   featured: [
@@ -170,12 +191,24 @@ export const useProducts = () => {
   useEffect(() => {
     const fetchProducts = async () => {
       try {
-        // Simulando una llamada a una API
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        setProducts(sampleProducts);
+        console.log('[useProducts] Consultando productos en la API');
+        const response = await InvocarMetodo('productos.php', 'default');
+        const apiProducts = response?.data?.productos;
+
+        if (response?.status !== 'success' || !Array.isArray(apiProducts)) {
+          throw new Error(response?.message || 'La API no devolvio productos validos');
+        }
+
+        const adaptedProducts = apiProducts.map(adaptProduct);
+        console.log('[useProducts] Productos recibidos:', {
+          total: adaptedProducts.length,
+          categorias: Object.keys(groupProductsByCategory(adaptedProducts)),
+        });
+        setProducts(groupProductsByCategory(adaptedProducts));
       } catch (err) {
-        setError('Error al cargar los productos');
-        console.error('Error fetching products:', err);
+        const message = err?.message || 'Error al cargar los productos';
+        setError(message);
+        console.error('[useProducts] Error al cargar productos desde la API:', err);
       } finally {
         setLoading(false);
       }

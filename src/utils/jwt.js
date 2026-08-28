@@ -3,8 +3,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const DEFAULT_ISSUER = 'http://localhost/Repositorio%20de%20GITHUB/proyecto-casalai-main/proyecto-casalai-ca/';
 const DEFAULT_AUDIENCE = 'proyecto-casalai-ca';
 // Cambia este valor para definir el tiempo de la sesion
-const SESSION_EXPIRATION_SECONDS = 60;
+const SESSION_EXPIRATION_SECONDS = 6000;
+// Cambia este valor para definir el tiempo de advertencia (en segundos)
 const WARNING_THRESHOLD_SECONDS = 30;
+// Clave para almacenar la extensión de sesión
 const SESSION_EXTENSION_STORAGE_KEY = 'sessionExtensionSeconds';
 
 const normalizeTokenValue = (value) => {
@@ -251,7 +253,7 @@ export const getStoredSessionExtensionSeconds = async () => {
   }
 };
 
-export const extendStoredSession = async (seconds = 60) => {
+export const extendStoredSession = async (seconds = 6000) => {
   try {
     const currentValue = await getStoredSessionExtensionSeconds();
     const nextValue = Math.max(0, currentValue + seconds);

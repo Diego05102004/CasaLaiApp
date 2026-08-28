@@ -1,11 +1,11 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { secureGet, API_SCHEMAS } from '../../utils/api';
-
+import { InvocarMetodo } from '../../utils/comunicadorApi';
 export const fetchProducts = createAsyncThunk(
   'products/fetchProducts',
   async (params = {}, { rejectWithValue }) => {
     try {
-      const response = await secureGet('/productos.php', params, API_SCHEMAS.getProducts);
+      const response = await InvocarMetodo('productos.php', 'default', params);
+      console.log('[Productos] Respuesta de todos los productos:', response);
       
       if (response.status === 'success') {
         return {
@@ -25,8 +25,15 @@ export const fetchProductsByCategory = createAsyncThunk(
   'products/fetchProductsByCategory',
   async (categoriaId, { rejectWithValue }) => {
     try {
-      const response = await secureGet('/productos.php', { categoria: categoriaId }, API_SCHEMAS.getProducts);
-      
+      const response = await InvocarMetodo(
+        'productos.php',
+        'por_categoria',
+        { categoria: categoriaId }
+      );
+      console.log('[Productos] Respuesta por categoria:', {
+        categoriaId,
+        response,
+      });
       if (response.status === 'success') {
         return {
           products: response.data.productos,
@@ -46,11 +53,23 @@ export const fetchProductById = createAsyncThunk(
   'products/fetchProductById',
   async (productId, { rejectWithValue }) => {
     try {
-      const response = await secureGet('/productos.php', { id: productId }, API_SCHEMAS.getProducts);
+      const response = await InvocarMetodo(
+        'productos.php',
+        'por_id',
+        { id: productId }
+      );
+      console.log('[Productos] Respuesta por ID:', { productId, response });
       
       if (response.status === 'success') {
+        const product = response.data.producto || response.data.productos?.[0];
         return {
-          product: response.data.productos[0] || null
+          product: product ? {
+            ...product,
+            name: product.nombre,
+            description: product.descripcion || '',
+            price: Number(product.precio) || 0,
+            image: product.imagen || null,
+          } : null
         };
       } else {
         return rejectWithValue(response.message || 'Error al obtener el producto');

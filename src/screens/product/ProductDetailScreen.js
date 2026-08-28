@@ -11,12 +11,12 @@ import {
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { addToCart } from '../../redux/slices/cartSlice';
+import { fetchProductById } from '../../redux/slices/productSlice';
 import COLORS from '../../constants/colors';
 import theme from '../../constants/theme';
 import ScreenWithHeader from '../../components/common/ScreenWithHeader';
 import ProductCard from '../../components/ProductCard';
 import { Ionicons } from '@expo/vector-icons';
-import { sampleProducts } from '../main/HomeScreen';
 
 const { width } = Dimensions.get('window');
 
@@ -50,30 +50,14 @@ const relatedProducts = [
 
 const ProductDetailScreen = ({ route, navigation }) => {
   const { productId } = route.params;
-  const [product, setProduct] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [quantity, setQuantity] = useState(1);
   const dispatch = useDispatch();
+  const { currentProduct: product, loading, error } = useSelector((state) => state.products);
 
-  // Buscar el producto en los datos de muestra (en una aplicación real, esto vendría de una API)
   useEffect(() => {
-    // Simular carga de datos
-    const timer = setTimeout(() => {
-      // Combinar todos los productos de las categorías
-      const allProducts = [
-        ...(sampleProducts.featured || []),
-        ...(sampleProducts.impresoras || []),
-        ...(sampleProducts.tintas || []),
-        ...(sampleProducts.cartuchos || [])
-      ];
-      
-      const foundProduct = allProducts.find(p => p.id === productId);
-      setProduct(foundProduct);
-      setLoading(false);
-    }, 500);
-
-    return () => clearTimeout(timer);
-  }, [productId]);
+    console.log('[ProductDetail] Consultando producto:', productId);
+    dispatch(fetchProductById(productId));
+  }, [dispatch, productId]);
 
   const handleAddToCart = () => {
     if (product) {
@@ -106,7 +90,7 @@ const ProductDetailScreen = ({ route, navigation }) => {
     return (
       <ScreenWithHeader>
         <View style={styles.loadingContainer}>
-          <Text>Cargando detalles del producto...</Text>
+          <Text>{error || 'Cargando detalles del producto...'}</Text>
         </View>
       </ScreenWithHeader>
     );
@@ -118,7 +102,7 @@ const ProductDetailScreen = ({ route, navigation }) => {
         {/* Imagen del producto */}
         <View style={styles.imageContainer}>
           <Image 
-            source={{ uri: `https://via.placeholder.com/400x300?text=${product.name}` }} 
+            source={product.image ? { uri: product.image } : require('../../assets/images/producto-default.jpg')}
             style={styles.productImage}
             resizeMode="contain"
           />
