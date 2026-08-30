@@ -11,20 +11,17 @@ import {
   Alert,
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
+import { Ionicons } from '@expo/vector-icons';
 import { registerUser } from '../../redux/slices/authSlice';
 import COLORS from '../../constants/colors';
 import theme from '../../constants/theme';
-import { 
-  validateEmail, 
-  validatePasswordRegister, 
-  validateUsername,
-  validateLength,
-  validateNotEmpty
-} from '../../utils/validation';
+
+import { filterKeyPress, validateField } from '../../validation/authValidation';
 
 const RegisterScreen = ({ navigation }) => {
   const [nombreUsuario, setNombreUsuario] = useState('');
   const [clave, setClave] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [nombre, setNombre] = useState('');
   const [apellido, setApellido] = useState('');
   const [correo, setCorreo] = useState('');
@@ -36,60 +33,68 @@ const RegisterScreen = ({ navigation }) => {
   const dispatch = useDispatch();
   const { loading, error } = useSelector((state) => state.auth);
 
+  const handleNombreUsuarioChange = (text) => {
+    const filtered = filterKeyPress.nombre_usuario(text);
+    setNombreUsuario(filtered);
+    setErrors((prev) => ({ ...prev, nombreUsuario: validateField('nombre_usuario', filtered) }));
+  };
+
+  const handleClaveChange = (text) => {
+    const filtered = filterKeyPress.clave(text);
+    setClave(filtered);
+    setErrors((prev) => ({ ...prev, clave: validateField('clave', filtered) }));
+  };
+
+  const handleNombreChange = (text) => {
+    const filtered = filterKeyPress.nombre(text);
+    setNombre(filtered);
+    setErrors((prev) => ({ ...prev, nombre: validateField('nombre', filtered) }));
+  };
+
+  const handleApellidoChange = (text) => {
+    const filtered = filterKeyPress.apellido(text);
+    setApellido(filtered);
+    setErrors((prev) => ({ ...prev, apellido: validateField('apellido', filtered) }));
+  };
+
+  const handleCorreoChange = (text) => {
+    const filtered = filterKeyPress.correo(text);
+    setCorreo(filtered);
+    setErrors((prev) => ({ ...prev, correo: validateField('correo', filtered) }));
+  };
+
+  const handleTelefonoChange = (text) => {
+    const filtered = filterKeyPress.telefono(text);
+    setTelefono(filtered);
+    setErrors((prev) => ({ ...prev, telefono: validateField('telefono', filtered) }));
+  };
+
+  const handleCedulaChange = (text) => {
+    const filtered = filterKeyPress.cedula(text);
+    setCedula(filtered);
+    setErrors((prev) => ({ ...prev, cedula: validateField('cedula', filtered) }));
+  };
+
+  const handleDireccionChange = (text) => {
+    const filtered = filterKeyPress.direccion(text);
+    setDireccion(filtered);
+    setErrors((prev) => ({ ...prev, direccion: validateField('direccion', filtered) }));
+  };
+
   const validateForm = () => {
-    const newErrors = {};
-
-    // Validar nombre de usuario
-    if (!validateNotEmpty(nombreUsuario)) {
-      newErrors.nombreUsuario = 'El nombre de usuario es requerido';
-    } else if (!validateUsername(nombreUsuario)) {
-      newErrors.nombreUsuario = 'El nombre de usuario debe tener entre 3 y 50 caracteres, solo letras, números y guiones bajos';
-    }
-
-    // Validar contraseña
-    if (!validateNotEmpty(clave)) {
-      newErrors.clave = 'La contraseña es requerida';
-    } else if (!validatePasswordRegister(clave)) {
-      newErrors.clave = 'La contraseña debe tener entre 6 y 15 caracteres, al menos una mayúscula, un número y un carácter especial';
-    }
-
-    // Validar nombre
-    if (!validateNotEmpty(nombre)) {
-      newErrors.nombre = 'El nombre es requerido';
-    } else if (!validateLength(nombre, 2, 50)) {
-      newErrors.nombre = 'El nombre debe tener entre 2 y 50 caracteres';
-    }
-
-    // Validar apellido
-    if (!validateNotEmpty(apellido)) {
-      newErrors.apellido = 'El apellido es requerido';
-    } else if (!validateLength(apellido, 2, 50)) {
-      newErrors.apellido = 'El apellido debe tener entre 2 y 50 caracteres';
-    }
-
-    // Validar correo
-    if (!validateNotEmpty(correo)) {
-      newErrors.correo = 'El correo es requerido';
-    } else if (!validateEmail(correo)) {
-      newErrors.correo = 'El correo no es válido';
-    }
-
-    // Validar teléfono
-    if (!validateNotEmpty(telefono)) {
-      newErrors.telefono = 'El teléfono es requerido';
-    } else if (!validateLength(telefono, 10, 20)) {
-      newErrors.telefono = 'El teléfono debe tener entre 10 y 20 caracteres';
-    }
-
-    // Validar cédula
-    if (!validateNotEmpty(cedula)) {
-      newErrors.cedula = 'La cédula es requerida';
-    } else if (!validateLength(cedula, 5, 20)) {
-      newErrors.cedula = 'La cédula debe tener entre 5 y 20 caracteres';
-    }
+    const newErrors = {
+      nombreUsuario: validateField('nombre_usuario', nombreUsuario),
+      clave: validateField('clave', clave),
+      nombre: validateField('nombre', nombre),
+      apellido: validateField('apellido', apellido),
+      correo: validateField('correo', correo),
+      telefono: validateField('telefono', telefono),
+      cedula: validateField('cedula', cedula),
+      direccion: validateField('direccion', direccion),
+    };
 
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    return Object.values(newErrors).every((err) => !err);
   };
 
   const handleRegister = () => {
@@ -109,7 +114,7 @@ const RegisterScreen = ({ navigation }) => {
 
   React.useEffect(() => {
     if (error) {
-      Alert.alert('Error', error);
+      Alert.alert('Error', typeof error === 'object' ? error.message : error);
     }
   }, [error]);
 
@@ -121,6 +126,7 @@ const RegisterScreen = ({ navigation }) => {
       <ScrollView
         contentContainerStyle={styles.scrollContainer}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={true}
       >
         <View style={styles.header}>
           <Text style={styles.title}>Registro de Usuario</Text>
@@ -134,22 +140,36 @@ const RegisterScreen = ({ navigation }) => {
               style={[styles.input, errors.nombreUsuario && styles.inputError]}
               placeholder="usuario123"
               value={nombreUsuario}
-              onChangeText={setNombreUsuario}
+              onChangeText={handleNombreUsuarioChange}
               autoCapitalize="none"
+              maxLength={20}
             />
-            {errors.nombreUsuario && <Text style={styles.errorText}>{errors.nombreUsuario}</Text>}
+            {errors.nombreUsuario ? <Text style={styles.errorText}>{errors.nombreUsuario}</Text> : null}
           </View>
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Contraseña</Text>
-            <TextInput
-              style={[styles.input, errors.clave && styles.inputError]}
-              placeholder="••••••••"
-              value={clave}
-              onChangeText={setClave}
-              secureTextEntry
-            />
-            {errors.clave && <Text style={styles.errorText}>{errors.clave}</Text>}
+            <View style={[styles.passwordInputContainer, errors.clave && styles.inputError]}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="••••••••"
+                value={clave}
+                onChangeText={handleClaveChange}
+                secureTextEntry={!showPassword}
+                maxLength={15}
+              />
+              <TouchableOpacity
+                style={styles.eyeButton}
+                onPress={() => setShowPassword(!showPassword)}
+              >
+                <Ionicons
+                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                  size={22}
+                  color={COLORS.textSecondary || '#666'}
+                />
+              </TouchableOpacity>
+            </View>
+            {errors.clave ? <Text style={styles.errorText}>{errors.clave}</Text> : null}
           </View>
 
           <View style={styles.inputGroup}>
@@ -158,9 +178,10 @@ const RegisterScreen = ({ navigation }) => {
               style={[styles.input, errors.nombre && styles.inputError]}
               placeholder="Juan"
               value={nombre}
-              onChangeText={setNombre}
+              onChangeText={handleNombreChange}
+              maxLength={50}
             />
-            {errors.nombre && <Text style={styles.errorText}>{errors.nombre}</Text>}
+            {errors.nombre ? <Text style={styles.errorText}>{errors.nombre}</Text> : null}
           </View>
 
           <View style={styles.inputGroup}>
@@ -169,57 +190,63 @@ const RegisterScreen = ({ navigation }) => {
               style={[styles.input, errors.apellido && styles.inputError]}
               placeholder="Pérez"
               value={apellido}
-              onChangeText={setApellido}
+              onChangeText={handleApellidoChange}
+              maxLength={50}
             />
-            {errors.apellido && <Text style={styles.errorText}>{errors.apellido}</Text>}
+            {errors.apellido ? <Text style={styles.errorText}>{errors.apellido}</Text> : null}
           </View>
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Correo Electrónico</Text>
             <TextInput
               style={[styles.input, errors.correo && styles.inputError]}
-              placeholder="juan@ejemplo.com"
+              placeholder="juan@gmail.com"
               value={correo}
-              onChangeText={setCorreo}
+              onChangeText={handleCorreoChange}
               autoCapitalize="none"
               keyboardType="email-address"
+              maxLength={50}
             />
-            {errors.correo && <Text style={styles.errorText}>{errors.correo}</Text>}
+            {errors.correo ? <Text style={styles.errorText}>{errors.correo}</Text> : null}
           </View>
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Teléfono</Text>
             <TextInput
               style={[styles.input, errors.telefono && styles.inputError]}
-              placeholder="04141234567"
+              placeholder="0414-123-4567"
               value={telefono}
-              onChangeText={setTelefono}
+              onChangeText={handleTelefonoChange}
               keyboardType="phone-pad"
+              maxLength={13}
             />
-            {errors.telefono && <Text style={styles.errorText}>{errors.telefono}</Text>}
+            {errors.telefono ? <Text style={styles.errorText}>{errors.telefono}</Text> : null}
           </View>
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Cédula</Text>
             <TextInput
               style={[styles.input, errors.cedula && styles.inputError]}
-              placeholder="12345678"
+              placeholder="12.345.678"
               value={cedula}
-              onChangeText={setCedula}
+              onChangeText={handleCedulaChange}
               keyboardType="numeric"
+              maxLength={10}
             />
-            {errors.cedula && <Text style={styles.errorText}>{errors.cedula}</Text>}
+            {errors.cedula ? <Text style={styles.errorText}>{errors.cedula}</Text> : null}
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Dirección (Opcional)</Text>
+            <Text style={styles.label}>Dirección</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, errors.direccion && styles.inputError]}
               placeholder="Dirección completa"
               value={direccion}
-              onChangeText={setDireccion}
+              onChangeText={handleDireccionChange}
               multiline
+              maxLength={100}
             />
+            {errors.direccion ? <Text style={styles.errorText}>{errors.direccion}</Text> : null}
           </View>
 
           <TouchableOpacity
@@ -253,18 +280,19 @@ const styles = StyleSheet.create({
   },
   scrollContainer: {
     flexGrow: 1,
-    padding: 20,
-    justifyContent: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 30,
+    paddingBottom: 40,
   },
   header: {
     alignItems: 'center',
-    marginBottom: 30,
+    marginBottom: 25,
   },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
     color: COLORS.primary,
-    marginBottom: 10,
+    marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
@@ -274,7 +302,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   inputGroup: {
-    marginBottom: 20,
+    marginBottom: 18,
   },
   label: {
     fontSize: 14,
@@ -291,11 +319,30 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: COLORS.text,
   },
+  passwordInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 8,
+  },
+  passwordInput: {
+    flex: 1,
+    padding: 12,
+    fontSize: 16,
+    color: COLORS.text,
+  },
+  eyeButton: {
+    paddingHorizontal: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   inputError: {
-    borderColor: COLORS.error,
+    borderColor: COLORS.error || COLORS.danger,
   },
   errorText: {
-    color: COLORS.error,
+    color: COLORS.error || COLORS.danger,
     fontSize: 12,
     marginTop: 5,
   },
@@ -317,6 +364,7 @@ const styles = StyleSheet.create({
   linkButton: {
     alignItems: 'center',
     marginTop: 20,
+    marginBottom: 10,
   },
   linkText: {
     color: COLORS.primary,

@@ -11,12 +11,14 @@ import {
   Image,
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
+import { Ionicons } from '@expo/vector-icons';
 import { loginUser, clearError } from '../../redux/slices/authSlice';
 import COLORS from '../../constants/colors';
 import theme from '../../constants/theme';
-import { Image as RNImage } from 'react-native';
-import { validateEmail, validatePassword, validateEmailWithDomain, validateUsername } from '../../utils/validation';
 import { API_BASE_URL } from '../../config/apiConfig';
+
+// Importación de las funciones del archivo de validaciones
+import { filterKeyPress, validateField } from '../../validation/authValidation';
 
 // Intentar cargar la imagen
 let logoImage;
@@ -27,13 +29,10 @@ try {
   logoImage = null;
 }
 
-// Dominios de email permitidos (configurar según necesidad)
-// Temporalmente deshabilitado para permitir cualquier dominio durante pruebas
-const ALLOWED_EMAIL_DOMAINS = [];
-
 const LoginScreen = ({ navigation }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [usernameError, setUsernameError] = useState('');
   const [passwordError, setPasswordError] = useState('');
@@ -42,7 +41,6 @@ const LoginScreen = ({ navigation }) => {
   const dispatch = useDispatch();
   const { loading, error, user } = useSelector((state) => state.auth);
 
-  // Verificar si la imagen existe
   useEffect(() => {
     if (!logoImage) {
       console.error('No se pudo cargar la imagen');
@@ -51,26 +49,22 @@ const LoginScreen = ({ navigation }) => {
   }, []);
 
   useEffect(() => {
-    // Limpiar errores al desmontar
     return () => {
       dispatch(clearError());
     };
   }, [dispatch]);
 
   useEffect(() => {
-    // Capturar respuesta de la API cuando hay error o éxito
     try {
       if (error && typeof error === 'object' && error.apiResponse) {
         setApiResponse(error.apiResponse);
       } else if (error) {
-        // Si el error es un string, mostrarlo directamente
         setApiResponse({
           status: 'error',
           message: typeof error === 'string' ? error : (error.message || 'Error desconocido'),
           data: error
         });
       } else if (user) {
-        // Si el login fue exitoso, capturar información adicional
         setApiResponse({ status: 'success', message: 'Login exitoso' });
       }
     } catch (e) {
@@ -78,54 +72,61 @@ const LoginScreen = ({ navigation }) => {
     }
   }, [error, user]);
 
+  const handleUsernameChange = (text) => {
+    const filteredText = filterKeyPress.nombre_usuario(text);
+    setUsername(filteredText);
+
+    if (!filteredText.trim()) {
+      setUsernameError('');
+    } else {
+      setUsernameError(validateField('usernameLogin', filteredText));
+    }
+  };
+
+  const handlePasswordChange = (text) => {
+    const filteredText = filterKeyPress.clave(text);
+    setPassword(filteredText);
+
+    if (!filteredText.trim()) {
+      setPasswordError('');
+    } else {
+      setPasswordError(validateField('passwordLogin', filteredText));
+    }
+  };
+
   const handleLogin = async () => {
-    // Resetear errores
-    setUsernameError('');
-    setPasswordError('');
     setDebugData(null);
     setApiResponse(null);
 
-    // Validar username o email
+    let uError = '';
+    let pError = '';
+
     if (!username.trim()) {
-      setUsernameError('El usuario o correo es requerido');
-      return;
-    }
-
-    // Si parece un email, validar como email
-    if (username.includes('@')) {
-      if (!validateEmailWithDomain(username, ALLOWED_EMAIL_DOMAINS)) {
-        setUsernameError('Email inválido');
-        return;
-      }
+      uError = '*Este campo es obligatorio*';
     } else {
-      // Si es username, validar formato
-      if (!validateUsername(username)) {
-        setUsernameError('Usuario inválido. Solo letras, números y guiones bajos (3-50 caracteres)');
-        return;
-      }
+      uError = validateField('usernameLogin', username);
     }
 
-    // Validar contraseña
     if (!password.trim()) {
-      setPasswordError('La contraseña es requerida');
-      return;
+      pError = '*Este campo es obligatorio*';
+    } else {
+      pError = validateField('passwordLogin', password);
     }
-    if (!validatePassword(password)) {
-      setPasswordError('La contraseña debe tener entre 6 y 15 caracteres');
+
+    setUsernameError(uError);
+    setPasswordError(pError);
+
+    if (uError || pError) {
       return;
     }
 
-    // Enviar como email o username según corresponda
-    const loginData = username.includes('@')
-      ? { email: username, password, name: 'Usuario' }
-      : { username: username, password, name: 'Usuario' };
+    const loginData = { username: username, password, name: 'Usuario' };
 
-    // Capturar datos para depuración
     setDebugData({
       timestamp: new Date().toISOString(),
       apiURL: `${API_BASE_URL}/login.php`,
       requestData: loginData,
-      requestType: username.includes('@') ? 'EMAIL_LOGIN' : 'USERNAME_LOGIN'
+      requestType: 'USERNAME_LOGIN'
     });
 
     try {
@@ -159,15 +160,11 @@ const LoginScreen = ({ navigation }) => {
               source={logoImage}
               style={styles.logo}
               resizeMode="contain"
-              onError={(e) => {
-                console.log('Error al cargar la imagen:', e);
-                setImageError(true);
-              }}
+              onError={() => setImageError(true)}
             />
           ) : (
             <View style={[styles.logo, { backgroundColor: COLORS.lightGray, justifyContent: 'center', alignItems: 'center' }]}>
               <Text style={{ color: COLORS.primary }}>Logo no disponible</Text>
-              <Text style={{ color: COLORS.primary, fontSize: 10 }}>Ruta: ../../../assets/images/LOGO.png</Text>
             </View>
           )}
           <Text style={styles.title}>Bienvenido</Text>
@@ -184,19 +181,17 @@ const LoginScreen = ({ navigation }) => {
           )}
 
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>Usuario o correo</Text>
+            <Text style={styles.label}>Usuario</Text>
             <TextInput
               style={[styles.input, usernameError && styles.inputError]}
-              placeholder="Ingresa tu usuario o correo"
+              placeholder="Ingresa tu usuario"
               placeholderTextColor={COLORS.placeholder}
               value={username}
-              onChangeText={(text) => {
-                setUsername(text);
-                setUsernameError('');
-              }}
+              onChangeText={handleUsernameChange}
               keyboardType="default"
               autoCapitalize="none"
               autoCorrect={false}
+              maxLength={20}
               editable={!loading}
             />
             {usernameError ? <Text style={styles.fieldErrorText}>{usernameError}</Text> : null}
@@ -204,18 +199,28 @@ const LoginScreen = ({ navigation }) => {
 
           <View style={styles.inputContainer}>
             <Text style={styles.label}>Contraseña</Text>
-            <TextInput
-              style={[styles.input, passwordError && styles.inputError]}
-              placeholder="Ingresa tu contraseña"
-              placeholderTextColor={COLORS.placeholder}
-              value={password}
-              onChangeText={(text) => {
-                setPassword(text);
-                setPasswordError('');
-              }}
-              secureTextEntry
-              editable={!loading}
-            />
+            <View style={[styles.passwordInputContainer, passwordError && styles.inputError]}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="Ingresa tu contraseña"
+                placeholderTextColor={COLORS.placeholder}
+                value={password}
+                onChangeText={handlePasswordChange}
+                secureTextEntry={!showPassword}
+                maxLength={15}
+                editable={!loading}
+              />
+              <TouchableOpacity
+                style={styles.eyeButton}
+                onPress={() => setShowPassword(!showPassword)}
+              >
+                <Ionicons
+                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                  size={22}
+                  color={COLORS.textSecondary || '#666'}
+                />
+              </TouchableOpacity>
+            </View>
             {passwordError ? <Text style={styles.fieldErrorText}>{passwordError}</Text> : null}
           </View>
 
@@ -231,10 +236,7 @@ const LoginScreen = ({ navigation }) => {
 
           <View style={styles.footer}>
             <Text style={styles.footerText}>¿No tienes una cuenta? </Text>
-            <TouchableOpacity
-              onPress={() => navigation.navigate('Register')}
-              disabled={loading}
-            >
+            <TouchableOpacity onPress={handleGoToRegister} disabled={loading}>
               <Text style={styles.footerLink}>Regístrate</Text>
             </TouchableOpacity>
           </View>
@@ -273,7 +275,6 @@ const LoginScreen = ({ navigation }) => {
                   <Text style={styles.debugText}>Username: {user.username}</Text>
                   <Text style={styles.debugText}>Email: {user.email}</Text>
                   <Text style={styles.debugText}>Rol: {user.role}</Text>
-                  <Text style={styles.debugText}>Token: {user.token ? user.token.substring(0, 20) + '...' : 'N/A'}</Text>
                 </View>
               )}
 
@@ -298,8 +299,8 @@ const styles = StyleSheet.create({
   },
   scrollContainer: {
     flexGrow: 1,
-    justifyContent: 'center',
     padding: theme.spacing.lg,
+    paddingVertical: theme.spacing.xl,
   },
   logoContainer: {
     alignItems: 'center',
@@ -349,6 +350,25 @@ const styles = StyleSheet.create({
     padding: theme.spacing.md,
     ...theme.typography.body,
     color: COLORS.text,
+  },
+  passwordInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: theme.radius.md,
+  },
+  passwordInput: {
+    flex: 1,
+    padding: theme.spacing.md,
+    ...theme.typography.body,
+    color: COLORS.text,
+  },
+  eyeButton: {
+    paddingHorizontal: theme.spacing.md,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   inputError: {
     borderColor: COLORS.danger,
