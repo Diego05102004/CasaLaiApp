@@ -1,926 +1,769 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  Alert,
+  ActivityIndicator,
+  Modal,
+  TextInput,
+  Image,
+  Platform,
+} from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
-import { useDispatch, useSelector } from 'react-redux';
-import { clearCart } from '../../redux/slices/cartSlice';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import COLORS from '../../constants/colors';
-import theme from '../../constants/theme';
-import { validateVenezuelaPhone, validatePaymentReference } from '../../utils/validation';
-import { sanitizeForAPI } from '../../sanitization';
+import { InvocarMetodo } from '../../utils/comunicadorApi';
 
-const banks = [
-  { id: '0102', name: 'Banco de Venezuela' },
-  { id: '0104', name: 'Venezolano de Crédito' },
-  { id: '0105', name: 'Banco Mercantil' },
-  { id: '0108', name: 'Banco Provincial' },
-  { id: '0114', name: 'Bancaribe' },
-  { id: '0115', name: 'Banco Exterior' },
-  { id: '0116', name: 'Banco Occidental de Descuento' },
-  { id: '0128', name: 'Banco Caroní' },
-  { id: '0134', name: 'Banesco' },
-  { id: '0137', name: 'Banco Sofitasa' },
-  { id: '0138', name: 'Banco Plaza' },
-  { id: '0146', name: 'Banco de la Gente Emprendedora' },
-  { id: '0151', name: 'BFC Banco Fondo Común' },
-  { id: '0156', name: '100% Banco' },
-  { id: '0157', name: 'DelSur' },
-  { id: '0163', name: 'Banco del Tesoro' },
-  { id: '0166', name: 'Banco Agrícola de Venezuela' },
-  { id: '0168', name: 'Bancrecer' },
-  { id: '0169', name: 'Mi Banco' },
-  { id: '0171', name: 'Banco Activo' },
-  { id: '0172', name: 'Bancamiga' },
-  { id: '0173', name: 'Banco Internacional de Desarrollo' },
-  { id: '0174', name: 'Banplus' },
-  { id: '0175', name: 'Banco Bicentenario' },
-  { id: '0176', name: 'Banco de la Fuerza Armada Nacional Bolivariana' },
-  { id: '0177', name: 'Banco de la Gente Emprendedora' },
-  { id: '0190', name: 'Citibank' },
-  { id: '0191', name: 'Banco Nacional de Crédito' },
-];
+const PAYMENT_METHOD_ORDER = ['Pago Movil', 'Transferencia', 'Zelle'];
+
+const formatCurrency = (value) => {
+  const numericValue = Number(value || 0);
+
+  return new Intl.NumberFormat('es-VE', {
+    style: 'currency',
+    currency: 'VES',
+    minimumFractionDigits: 2,
+  }).format(numericValue);
+};
+
+const normalizeAccounts = (payload) => {
+  if (!payload) return [];
+
+  let rawList = [];
+
+  if (Array.isArray(payload)) rawList = payload;
+  else if (Array.isArray(payload?.data)) rawList = payload.data;
+  else if (Array.isArray(payload?.data?.cuentas)) rawList = payload.data.cuentas;
+  else if (Array.isArray(payload?.cuentas)) rawList = payload.cuentas;
+  else if (Array.isArray(payload?.data?.data?.cuentas)) rawList = payload.data.data.cuentas;
+
+  return rawList
+    .map((item) => {
+      const metodos = typeof item.metodos === 'string'
+        ? item.metodos.split(',').map((method) => method.trim()).filter(Boolean)
+        : Array.isArray(item.metodos)
+          ? item.metodos.filter(Boolean)
+          : [];
+
+      return {
+        id_cuenta: item.id_cuenta ?? item.id ?? `${item.nombre_banco ?? 'cuenta'}-${item.numero_cuenta ?? Math.random()}`,
+        nombre_banco: item.nombre_banco ?? 'Cuenta bancaria',
+        numero_cuenta: item.numero_cuenta ?? '',
+        rif_cuenta: item.rif_cuenta ?? '',
+        telefono_cuenta: item.telefono_cuenta ?? '',
+        correo_cuenta: item.correo_cuenta ?? '',
+        metodos,
+        estado: String(item.estado ?? 'habilitado').toLowerCase(),
+      };
+    })
+    .filter((item) => item.estado === 'habilitado');
+};
+
+const buildMethodMap = (accounts) => {
+  const grouped = {};
+
+  PAYMENT_METHOD_ORDER.forEach((method) => {
+    grouped[method] = [];
+  });
+
+  accounts.forEach((account) => {
+    const methods = Array.isArray(account.metodos) && account.metodos.length
+      ? account.metodos
+      : ['Transferencia'];
+
+    methods.forEach((method) => {
+      if (!PAYMENT_METHOD_ORDER.includes(method)) {
+        return;
+      }
+
+      if (!grouped[method]) {
+        grouped[method] = [];
+      }
+      grouped[method].push(account);
+    });
+  });
+
+  return grouped;
+};
+
+const getPaymentFormFields = (method, cuenta, total) => {
+  const baseAmount = Number(total || 0);
+
+  switch (method) {
+    case 'Pago Movil':
+      return [
+        { key: 'referencia', label: 'Referencia', placeholder: 'Ej. 123456', keyboardType: 'number-pad', maxLength: 20 },
+        { key: 'telefono', label: 'Teléfono del pagador', placeholder: cuenta?.telefono_cuenta || '0412-1234567', keyboardType: 'phone-pad' },
+        { key: 'monto', label: 'Monto pagado', placeholder: String(baseAmount.toFixed(2)), keyboardType: 'decimal-pad' },
+      ];
+    case 'Transferencia':
+      return [
+        { key: 'banco_origen', label: 'Banco de origen', placeholder: 'Ej. Banesco', keyboardType: 'default' },
+        { key: 'referencia', label: 'Referencia o número de operación', placeholder: 'Ej. 255487', keyboardType: 'default' },
+        { key: 'monto', label: 'Monto transferido', placeholder: String(baseAmount.toFixed(2)), keyboardType: 'decimal-pad' },
+      ];
+    case 'Zelle':
+      return [
+        { key: 'remitente', label: 'Nombre del remitente', placeholder: 'Ej. Ana García', keyboardType: 'default' },
+        { key: 'contacto', label: 'Correo o teléfono del remitente', placeholder: 'correo@ejemplo.com', keyboardType: 'default' },
+        { key: 'referencia', label: 'Referencia', placeholder: 'Ej. Z-4582', keyboardType: 'default' },
+        { key: 'monto', label: 'Monto enviado', placeholder: String(baseAmount.toFixed(2)), keyboardType: 'decimal-pad' },
+      ];
+    default:
+      return [];
+  }
+};
 
 const PaymentScreen = () => {
   const navigation = useNavigation();
-  const dispatch = useDispatch();
-  const { total } = useSelector(state => state.cart);
+  const route = useRoute();
+  const pedido = route.params?.pedido || null;
 
-  // Estados para los modales
-  const [showBankInfoModal, setShowBankInfoModal] = useState(false);
-  const [showMobilePaymentModal, setShowMobilePaymentModal] = useState(false);
-  
-  // Estados para el método de pago seleccionado
+  const [cuentas, setCuentas] = useState([]);
   const [selectedMethod, setSelectedMethod] = useState('');
-  
-  // Estados para el procesamiento
-  const [isProcessing, setIsProcessing] = useState(false);
-  
-  // Estados para Pago Móvil
-  const [phone, setPhone] = useState('');
-  const [reference, setReference] = useState('');
-  const [selectedBank, setSelectedBank] = useState('');
-  const [showBankDropdown, setShowBankDropdown] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [phoneError, setPhoneError] = useState('');
-  const [referenceError, setReferenceError] = useState('');
-  
-  // Datos de la empresa
-  const companyBankInfo = {
-    mobilePayment: {
-      bank: 'Banco de Venezuela',
-      phone: '0412-1234567',
-      ci: 'V-12345678',
-      name: 'Tienda LAI C.A.'
-    },
-    bankTransfer: {
-      bank: 'Banco de Venezuela',
-      accountType: 'Corriente',
-      accountNumber: '0102-1234-56789123456789',
-      ci: 'V-12345678',
-      name: 'Tienda LAI C.A.',
-      email: 'pagos@tulaiservicios.com'
-    }
-  };
+  const [selectedCuenta, setSelectedCuenta] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [showPaymentForm, setShowPaymentForm] = useState(false);
+  const [paymentSuccessVisible, setPaymentSuccessVisible] = useState(false);
+  const [paymentSuccessMessage, setPaymentSuccessMessage] = useState('');
+  const [paymentForm, setPaymentForm] = useState({
+    referencia: '',
+    monto: '',
+    telefono: '',
+    banco_origen: '',
+    remitente: '',
+    contacto: '',
+    comprobante: '',
+    comprobanteName: '',
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const formatPhoneNumber = (text) => {
-    // Remove all non-digit characters
-    const cleaned = text.replace(/\D/g, '');
-    
-    // Limitar a 11 dígitos (código de área + número)
-    const limited = cleaned.substring(0, 11);
-    
-    // Format as 0412-1234567 (4-7)
-    let formatted = '';
-    if (limited.length > 4) {
-      formatted = `${limited.slice(0, 4)}-${limited.slice(4, 11)}`;
-    } else {
-      formatted = limited;
-    }
-    
-    setPhone(limited); // Guardamos el número sin formato para procesamiento
-    setPhoneError(''); // Limpiar error al escribir
-  };
+  const methodGroups = useMemo(() => buildMethodMap(cuentas), [cuentas]);
+  const availableMethods = PAYMENT_METHOD_ORDER.filter((method) => (methodGroups[method]?.length || 0) > 0);
+  const paymentFormFields = useMemo(() => getPaymentFormFields(selectedMethod, selectedCuenta, pedido?.total || pedido?.monto || 0), [selectedMethod, selectedCuenta, pedido]);
 
-  const handlePaymentSuccess = () => {
-    // Vaciar el carrito
-    dispatch(clearCart());
-    
-    // Cerrar los modales
-    setShowMobilePaymentModal(false);
-    setShowBankInfoModal(false);
-    
-    // Mostrar mensaje de éxito con opciones
-    Alert.alert(
-      '✅ Pago Procesado',
-      '¡Tu pedido ha sido registrado con éxito!\n\nNúmero de referencia: ' + 
-      (reference || 'PM-' + Math.random().toString(36).substr(2, 8).toUpperCase()) + 
-      '\n\n¡Gracias por tu compra!',
-      [
-        { 
-          text: 'Aceptar',
-          onPress: () => {
-            navigation.popToTop();
-          },
-          style: 'default'
+  useEffect(() => {
+    const obtenerCuentas = async () => {
+      try {
+        setLoading(true);
+        const response = await InvocarMetodo('cuentas.php', 'default', {});
+        const data = normalizeAccounts(response);
+        setCuentas(data);
+
+        if (data.length > 0) {
+          const firstMethod = availableMethods[0] || 'Transferencia';
+          setSelectedMethod(firstMethod);
+          setSelectedCuenta(data.find((cuenta) => cuenta.metodos.includes(firstMethod)) || data[0]);
         }
-      ],
-      { cancelable: false }
-    );
-  };
+      } catch (error) {
+        console.error('[Payment] Error al cargar cuentas:', error);
+        Alert.alert('No se pudieron cargar las cuentas', error?.message || 'Intenta nuevamente.');
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  const handlePayment = () => {
-    // Resetear errores
-    setPhoneError('');
-    setReferenceError('');
+    obtenerCuentas();
+  }, []);
 
-    // Validar teléfono
-    if (!phone || phone.length === 0) {
-      setPhoneError('El teléfono es requerido');
-      return;
+  useEffect(() => {
+    if (!selectedMethod && availableMethods.length > 0) {
+      setSelectedMethod(availableMethods[0]);
     }
-    if (!validateVenezuelaPhone(phone)) {
-      setPhoneError('Teléfono venezolano inválido (formato: 0412-1234567)');
-      return;
-    }
+  }, [availableMethods, selectedMethod]);
 
-    // Validar referencia
-    if (!reference || reference.length === 0) {
-      setReferenceError('La referencia es requerida');
-      return;
-    }
-    if (!validatePaymentReference(reference)) {
-      setReferenceError('Referencia inválida (debe tener 6 dígitos)');
-      return;
-    }
+  useEffect(() => {
+    if (!selectedMethod) return;
 
-    // Sanitizar datos antes de procesar
-    const sanitizedData = sanitizeForAPI({
-      phone,
-      reference,
-      selectedBank,
-      total
-    }, {
-      phone: { type: 'phone' },
-      reference: { type: 'reference' },
-      selectedBank: { type: 'text' },
-      total: { type: 'number' }
+    const candidates = methodGroups[selectedMethod] || [];
+    if (!selectedCuenta || !candidates.some((cuenta) => cuenta.id_cuenta === selectedCuenta.id_cuenta)) {
+      setSelectedCuenta(candidates[0] || null);
+    }
+  }, [selectedMethod, methodGroups, selectedCuenta]);
+
+  const resetPaymentForm = () => {
+    const defaultAmount = String((pedido?.total || pedido?.monto || 0).toFixed(2));
+
+    setPaymentForm({
+      referencia: '',
+      monto: defaultAmount,
+      telefono: selectedCuenta?.telefono_cuenta || '',
+      banco_origen: '',
+      remitente: '',
+      contacto: '',
+      comprobante: '',
+      comprobanteName: '',
     });
-
-    // Lógica de pago simplificada
-    setIsProcessing(true);
-    
-    // Simular procesamiento
-    setTimeout(() => {
-      setIsProcessing(false);
-      handlePaymentSuccess();
-    }, 1500);
   };
 
-  const renderPaymentMethods = () => (
-    <View style={styles.paymentMethods}>
-      <TouchableOpacity 
-        style={styles.paymentMethod}
-        onPress={() => {
-          setSelectedMethod('mobile');
-          setShowMobilePaymentModal(true);
-        }}
-        activeOpacity={0.7}
-      >
-        <View style={styles.methodIconContainer}>
-          <Ionicons 
-            name="phone-portrait-outline" 
-            size={24} 
-            color={COLORS.primary} 
-          />
-        </View>
-        <View style={styles.methodTextContainer}>
-          <Text style={styles.paymentMethodText}>
-            Pago Móvil
-          </Text>
-          <Text style={styles.methodDescription}>Paga con tu teléfono móvil</Text>
-        </View>
-        <Ionicons name="chevron-forward" size={20} color={COLORS.textSecondary} />
-      </TouchableOpacity>
-
-      <TouchableOpacity 
-        style={[styles.paymentMethod, { marginTop: 12 }]}
-        onPress={() => {
-          setSelectedMethod('bank');
-          setShowBankInfoModal(true);
-        }}
-        activeOpacity={0.7}
-      >
-        <View style={styles.methodIconContainer}>
-          <Ionicons 
-            name="card-outline" 
-            size={24} 
-            color={COLORS.primary} 
-          />
-        </View>
-        <View style={styles.methodTextContainer}>
-          <Text style={styles.paymentMethodText}>
-            Ver Datos Bancarios
-          </Text>
-          <Text style={styles.methodDescription}>Consulta nuestros datos bancarios para transferencia</Text>
-        </View>
-        <Ionicons name="chevron-forward" size={20} color={COLORS.textSecondary} />
-      </TouchableOpacity>
-    </View>
-  );
-
-  const copyToClipboard = (text) => {
-    // In a real app, you would use Clipboard from 'react-native'
-    // For now, we'll just log it
-    console.log('Copied to clipboard:', text);
-    Alert.alert('Copiado', 'La información ha sido copiada al portapapeles');
+  const navigateToPedidos = () => {
+    try {
+      navigation.navigate('Main', { screen: 'Pedidos' });
+    } catch (error) {
+      try {
+        navigation.navigate('Pedidos');
+      } catch (navError) {
+        navigation.goBack();
+      }
+    }
   };
 
-  const renderMobilePaymentModal = () => (
-    <Modal
-      visible={showMobilePaymentModal}
-      animationType="slide"
-      transparent={true}
-      onRequestClose={() => setShowMobilePaymentModal(false)}
-    >
-      <View style={styles.modalOverlay}>
-        <View style={styles.bankModalContent}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.bankModalTitle}>Registrar Pago Móvil</Text>
-            <TouchableOpacity 
-              style={styles.closeButton}
-              onPress={() => setShowMobilePaymentModal(false)}
-            >
-              <Ionicons name="close" size={24} color={COLORS.text} />
-            </TouchableOpacity>
-          </View>
+  const handleConfirmPayment = () => {
+    if (!selectedMethod || !selectedCuenta) {
+      Alert.alert('Seleccione un método y una cuenta');
+      return;
+    }
 
-          <ScrollView style={styles.bankModalBody}>
-            <View style={styles.bankAccountCard}>
-              <View style={styles.bankHeader}>
-                <Ionicons name="phone-portrait" size={20} color={COLORS.primary} />
-                <Text style={styles.bankName}>Datos del Pago</Text>
-              </View>
-              
-              <View style={styles.formGroup}>
-                <Text style={styles.inputLabel}>Banco del que realiza el pago</Text>
-                <View style={styles.selectContainer}>
-                  <TouchableOpacity 
-                    style={styles.selectWrapper}
-                    onPress={() => setShowBankDropdown(!showBankDropdown)}
-                  >
-                    <Text 
-                      style={[
-                        styles.selectText, 
-                        !selectedBank && { color: COLORS.textSecondary },
-                        { flex: 1 }
-                      ]}
-                      numberOfLines={1}
-                      ellipsizeMode="tail"
-                    >
-                      {banks.find(b => b.id === selectedBank)?.name || 'Selecciona tu banco'}
-                    </Text>
-                    <Ionicons 
-                      name={showBankDropdown ? 'chevron-up' : 'chevron-down'} 
-                      size={20} 
-                      color={COLORS.textSecondary} 
-                      style={{ marginLeft: 8 }}
-                    />
-                  </TouchableOpacity>
-                </View>
-                
-                {showBankDropdown && (
-                  <View style={styles.dropdownContainer}>
-                    <View style={styles.searchContainer}>
-                      <Ionicons name="search" size={18} color={COLORS.textSecondary} style={styles.searchIcon} />
-                      <TextInput
-                        style={styles.searchInput}
-                        placeholder="Buscar banco..."
-                        value={searchQuery}
-                        onChangeText={setSearchQuery}
-                        placeholderTextColor={COLORS.textSecondary}
-                      />
-                      {searchQuery ? (
-                        <TouchableOpacity 
-                          style={styles.clearButton}
-                          onPress={() => setSearchQuery('')}
-                        >
-                          <Ionicons name="close-circle" size={18} color={COLORS.textSecondary} />
-                        </TouchableOpacity>
-                      ) : null}
-                    </View>
-                    <ScrollView 
-                      style={styles.dropdownScroll}
-                      nestedScrollEnabled={true}
-                      keyboardShouldPersistTaps="handled"
-                    >
-                      {banks
-                        .filter(bank => 
-                          bank.name.toLowerCase().includes(searchQuery.toLowerCase())
-                        )
-                        .map((bank) => (
-                          <TouchableOpacity
-                            key={bank.id}
-                            style={[
-                              styles.dropdownItem,
-                              selectedBank === bank.id && styles.dropdownItemSelected
-                            ]}
-                            onPress={() => {
-                              setSelectedBank(bank.id);
-                              setShowBankDropdown(false);
-                              setSearchQuery('');
-                            }}
-                          >
-                            <Text 
-                              style={[
-                                styles.dropdownItemText,
-                                selectedBank === bank.id && styles.dropdownItemTextSelected
-                              ]}
-                              numberOfLines={1}
-                              ellipsizeMode="tail"
-                            >
-                              {bank.name}
-                            </Text>
-                            {selectedBank === bank.id && (
-                              <Ionicons name="checkmark" size={18} color={COLORS.primary} />
-                            )}
-                          </TouchableOpacity>
-                        ))}
-                    </ScrollView>
-                  </View>
-                )}
-              </View>
+    resetPaymentForm();
+    setShowPaymentForm(true);
+  };
 
-              <View style={styles.formGroup}>
-                <Text style={styles.inputLabel}>Número de referencia (6 dígitos)</Text>
-                <View style={[styles.inputContainer, referenceError && styles.inputContainerError]}>
-                  <Ionicons name="receipt-outline" size={20} color={COLORS.textSecondary} style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="123456"
-                    keyboardType="number-pad"
-                    value={reference}
-                    onChangeText={(text) => {
-                      // Limitar a 6 dígitos numéricos
-                      const cleaned = text.replace(/[^0-9]/g, '').substring(0, 6);
-                      setReference(cleaned);
-                      setReferenceError('');
-                    }}
-                    maxLength={6}
-                  />
-                </View>
-                {referenceError ? <Text style={styles.fieldErrorText}>{referenceError}</Text> : null}
-              </View>
+  const handlePickComprobante = async () => {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Permiso requerido', 'Necesitas permitir acceso a la galería para adjuntar el comprobante.');
+        return;
+      }
 
-              <View style={styles.formGroup}>
-                <Text style={styles.inputLabel}>Número de teléfono</Text>
-                <View style={[styles.inputContainer, phoneError && styles.inputContainerError]}>
-                  <Ionicons name="phone-portrait-outline" size={20} color={COLORS.textSecondary} style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="04121234567"
-                    keyboardType="phone-pad"
-                    value={phone}
-                    onChangeText={formatPhoneNumber}
-                    maxLength={12}
-                  />
-                </View>
-                {phoneError ? <Text style={styles.fieldErrorText}>{phoneError}</Text> : null}
-              </View>
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.8,
+      });
 
-              <View style={styles.noteContainer}>
-                <Text style={styles.noteTitle}>Datos de Pago Móvil</Text>
-                <View style={styles.infoGrid}>
-                  <Text style={styles.infoLabel}>Banco:</Text>
-                  <Text style={styles.infoValue}>Banco de Venezuela</Text>
-                  
-                  <Text style={styles.infoLabel}>Teléfono:</Text>
-                  <TouchableOpacity onPress={() => copyToClipboard('04121234567')}>
-                    <Text style={styles.infoValueLink}>0412-1234567</Text>
-                  </TouchableOpacity>
-                  
-                  <Text style={styles.infoLabel}>C.I.:</Text>
-                  <Text style={styles.infoValue}>V-12345678</Text>
-                  
-                  <Text style={styles.infoLabel}>Nombre:</Text>
-                  <Text style={styles.infoValue}>Tienda LAI C.A.</Text>
-                </View>
-              </View>
+      if (result.canceled) {
+        return;
+      }
 
-              <View style={styles.noteContainer}>
-                <Text style={styles.noteTitle}>Nota Importante</Text>
-                <Text style={styles.noteText}>
-                  Por favor, asegúrate de que los datos ingresados sean correctos. El número de referencia debe coincidir exactamente con el que aparece en tu comprobante de pago.
-                </Text>
-              </View>
+      const asset = result.assets?.[0];
+      if (!asset) {
+        return;
+      }
 
-              <TouchableOpacity 
-                style={[
-                  styles.payButton, 
-                  (isProcessing || !selectedBank || !reference || reference.length < 6 || !phone) && styles.payButtonDisabled
-                ]}
-                onPress={handlePayment}
-                disabled={isProcessing || !selectedBank || !reference || reference.length < 6 || !phone}
-              >
-                <Text style={styles.payButtonText}>
-                  {isProcessing ? 'Procesando...' : 'Registrar Pago'}
-                </Text>
-                {!isProcessing && (
-                  <Ionicons name="checkmark-circle" size={20} color={COLORS.white} style={styles.payButtonIcon} />
-                )}
-              </TouchableOpacity>
-            </View>
-          </ScrollView>
-        </View>
+      setPaymentForm((previous) => ({
+        ...previous,
+        comprobante: asset.uri,
+        comprobanteName: asset.fileName || 'comprobante.jpg',
+      }));
+    } catch (error) {
+      Alert.alert('No se pudo adjuntar el comprobante', error?.message || 'Intenta nuevamente.');
+    }
+  };
+
+  const handleSubmitPaymentForm = async () => {
+    if (!selectedMethod || !selectedCuenta) {
+      Alert.alert('Debe seleccionar un método de pago antes de enviar el comprobante.');
+      return;
+    }
+
+    const trimmedReference = (paymentForm.referencia || '').trim();
+    const trimmedMonto = (paymentForm.monto || '').trim();
+
+    if (!trimmedReference) {
+      Alert.alert('Falta la referencia', 'Debes indicar la referencia o número de operación del pago.');
+      return;
+    }
+
+    if (!trimmedMonto) {
+      Alert.alert('Falta el monto', 'Debes indicar el monto pagado.');
+      return;
+    }
+
+    if (!paymentForm.comprobante) {
+      Alert.alert('Falta el comprobante', 'Adjunta la imagen del comprobante para registrar el pago.');
+      return;
+    }
+
+    const facturaId = pedido?.id_factura ?? pedido?.id ?? pedido?.numero ?? null;
+    const cuentaId = selectedCuenta?.id_cuenta ?? null;
+
+    if (!facturaId || !cuentaId) {
+      Alert.alert('Datos incompletos', 'No se pudo identificar la factura o la cuenta para registrar el pago.');
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    const payload = {
+      funcion: 'pago_ingresar',
+      factura: Number(facturaId),
+      cuenta: Number(cuentaId),
+      tipo: selectedMethod,
+      monto: Number(trimmedMonto),
+      referencia: trimmedReference,
+      comprobante: paymentForm.comprobanteName || paymentForm.comprobante,
+      fecha: new Date().toISOString().slice(0, 10),
+      observaciones: '',
+    };
+
+    console.log('[Payment] Registrando pago en backend:', payload);
+
+    try {
+      const response = await InvocarMetodo('pagos.php', 'pago_ingresar', payload);
+      const nestedData = response && typeof response === 'object' && response.data && typeof response.data === 'object' ? response.data : response;
+      const successStatus =
+        response?.status === 'success' ||
+        nestedData?.status === 'success' ||
+        response?.success === true ||
+        nestedData?.success === true ||
+        !!(nestedData?.pago_id || nestedData?.factura_id || nestedData?.id_detalles);
+
+      if (!successStatus) {
+        throw new Error(response?.message || nestedData?.message || 'La API rechazó el registro del pago.');
+      }
+
+      setShowPaymentForm(false);
+      setIsSubmitting(false);
+      const successText = response?.message || nestedData?.message || 'El pago fue registrado de forma exitosa, solo debe esperar a que sea verificado por el administrador.';
+      setPaymentSuccessMessage(successText === 'Operación exitosa' ? 'El pago fue registrado de forma exitosa, solo debe esperar a que sea verificado por el administrador.' : successText);
+      setPaymentSuccessVisible(true);
+    } catch (error) {
+      console.error('[Payment] Error registrando pago:', error);
+      setIsSubmitting(false);
+      Alert.alert(
+        'No se pudo registrar el pago',
+        error?.message || 'Revisa la referencia, el monto o la información del comprobante e intenta de nuevo.'
+      );
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+        <Text style={styles.loadingText}>Cargando métodos de pago...</Text>
       </View>
-    </Modal>
-  );
-
-  const renderBankInfoModal = () => (
-    <Modal
-      visible={showBankInfoModal}
-      animationType="slide"
-      transparent={true}
-      onRequestClose={() => setShowBankInfoModal(false)}
-    >
-      <View style={styles.modalOverlay}>
-        <View style={styles.bankModalContent}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.bankModalTitle}>Datos Bancarios</Text>
-            <TouchableOpacity 
-              style={styles.closeButton}
-              onPress={() => setShowBankInfoModal(false)}
-            >
-              <Ionicons name="close" size={24} color={COLORS.text} />
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView style={styles.bankModalBody}>
-            {/* Banesco Account */}
-            <View style={styles.bankAccountCard}>
-              <View style={styles.bankHeader}>
-                <Ionicons name="business" size={20} color={COLORS.primary} />
-                <Text style={styles.bankName}>Banesco</Text>
-              </View>
-              
-              <View style={styles.infoGrid}>
-                <Text style={styles.infoLabel}>Número de Cuenta:</Text>
-                <TouchableOpacity onPress={() => copyToClipboard('0134567890123456')}>
-                  <Text style={styles.infoValueLink}>0134-5678-9012-3456</Text>
-                </TouchableOpacity>
-                
-                <Text style={styles.infoLabel}>Titular:</Text>
-                <Text style={styles.infoValue}>Casa Lai C.A.</Text>
-                
-                <Text style={styles.infoLabel}>J-RIF:</Text>
-                <Text style={styles.infoValue}>J-12345678-9</Text>
-                
-                <Text style={styles.infoLabel}>Teléfono:</Text>
-                <Text style={styles.infoValue}>0412-1234567</Text>
-                
-                <Text style={styles.infoLabel}>Correo:</Text>
-                <Text style={styles.infoValue}>pagos@casalai.com</Text>
-              </View>
-            </View>
-
-            {/* Mercantil Account */}
-            <View style={[styles.bankAccountCard, {marginTop: 16}]}>
-              <View style={styles.bankHeader}>
-                <Ionicons name="business" size={20} color={COLORS.primary} />
-                <Text style={styles.bankName}>Mercantil</Text>
-              </View>
-              
-              <View style={styles.infoGrid}>
-                <Text style={styles.infoLabel}>Tipo de Cuenta:</Text>
-                <Text style={styles.infoValue}>Cuenta Corriente</Text>
-                
-                <Text style={styles.infoLabel}>Número de Cuenta:</Text>
-                <TouchableOpacity onPress={() => copyToClipboard('0105678901234567')}>
-                  <Text style={styles.infoValueLink}>0105-6789-0123-4567</Text>
-                </TouchableOpacity>
-                
-                <Text style={styles.infoLabel}>Titular:</Text>
-                <Text style={styles.infoValue}>Casa Lai C.A.</Text>
-                
-                <Text style={styles.infoLabel}>J-RIF:</Text>
-                <Text style={styles.infoValue}>J-12345678-9</Text>
-                
-                <Text style={styles.infoLabel}>Teléfono:</Text>
-                <Text style={styles.infoValue}>0412-1234567</Text>
-                
-                <Text style={styles.infoLabel}>Correo:</Text>
-                <Text style={styles.infoValue}>pagos@casalai.com</Text>
-              </View>
-            </View>
-
-            {/* Note Section */}
-            <View style={styles.noteContainer}>
-              <Text style={styles.noteTitle}>Nota:</Text>
-              <Text style={styles.noteText}>
-                Por favor, envíe el comprobante de pago al número de WhatsApp o correo electrónico indicado para confirmar su transacción.
-              </Text>
-            </View>
-          </ScrollView>
-        </View>
-      </View>
-    </Modal>
-  );
+    );
+  }
 
   return (
-    <KeyboardAvoidingView 
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.title}>Métodos de Pago</Text>
-        
-        {renderPaymentMethods()}
-        
-        <View style={styles.summary}>
-          <Text style={styles.summaryTitle}>Resumen del Pago</Text>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Subtotal:</Text>
-            <Text style={styles.summaryValue}>${total.toFixed(2)}</Text>
+    <View style={styles.container}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={styles.orderCard}>
+          <Text style={styles.sectionTitle}>Pedido seleccionado</Text>
+          <View style={styles.orderRow}>
+            <Text style={styles.orderLabel}>Factura</Text>
+            <Text style={styles.orderValue}>{pedido?.numero || pedido?.numero_factura || 'Sin número'}</Text>
           </View>
-          <View style={[styles.summaryRow, styles.totalRow]}>
-            <Text style={styles.totalLabel}>Total:</Text>
-            <Text style={styles.totalAmount}>${total.toFixed(2)}</Text>
+          <View style={styles.orderRow}>
+            <Text style={styles.orderLabel}>Estado</Text>
+            <Text style={styles.orderValue}>{pedido?.estado || 'Borrador'}</Text>
+          </View>
+          <View style={styles.orderRow}>
+            <Text style={styles.orderLabel}>Total</Text>
+            <Text style={styles.orderValue}>{formatCurrency(pedido?.total || pedido?.monto || 0)}</Text>
           </View>
         </View>
-        
-        <View style={styles.payButtonContainer}>
-          <TouchableOpacity 
-            style={[
-              styles.payButton,
-              isProcessing && styles.payButtonDisabled
-            ]} 
-            disabled={isProcessing}
-            onPress={handlePayment}
-            activeOpacity={0.9}
-          >
-            <Text style={styles.payButtonText}>
-              {isProcessing ? 'Procesando...' : `Pagar $${total.toFixed(2)}`}
-            </Text>
-            {!isProcessing && (
-              <Ionicons name="arrow-forward" size={20} color={COLORS.white} style={styles.payButtonIcon} />
-            )}
-          </TouchableOpacity>
-          <Text style={styles.securePaymentText}>
-            <Ionicons name="lock-closed" size={14} color={COLORS.textSecondary} /> Pago seguro
-          </Text>
+
+        <Text style={styles.sectionTitle}>Elige un método de pago</Text>
+        <View style={styles.methodList}>
+          {availableMethods.length === 0 ? (
+            <Text style={styles.emptyMethods}>No hay cuentas habilitadas para pagar en este momento.</Text>
+          ) : (
+            availableMethods.map((method) => (
+              <TouchableOpacity
+                key={method}
+                style={[styles.methodButton, selectedMethod === method && styles.methodButtonSelected]}
+                onPress={() => setSelectedMethod(method)}
+              >
+                <Text style={[styles.methodButtonText, selectedMethod === method && styles.methodButtonTextSelected]}>{method}</Text>
+              </TouchableOpacity>
+            ))
+          )}
         </View>
+
+        {selectedMethod && methodGroups[selectedMethod]?.length > 0 && (
+          <View style={styles.accountList}>
+            <Text style={styles.sectionTitle}>Cuentas disponibles</Text>
+            {methodGroups[selectedMethod].map((cuenta) => (
+              <TouchableOpacity
+                key={cuenta.id_cuenta}
+                style={[styles.accountCard, selectedCuenta?.id_cuenta === cuenta.id_cuenta && styles.accountCardSelected]}
+                onPress={() => setSelectedCuenta(cuenta)}
+              >
+                <View style={styles.accountHeader}>
+                  <Ionicons name="card-outline" size={18} color={COLORS.primary} />
+                  <Text style={styles.accountName}>{cuenta.nombre_banco}</Text>
+                </View>
+
+                {cuenta.numero_cuenta ? (
+                  <Text style={styles.accountInfo}>Cuenta: {cuenta.numero_cuenta}</Text>
+                ) : null}
+
+                {cuenta.telefono_cuenta ? (
+                  <Text style={styles.accountInfo}>Teléfono: {cuenta.telefono_cuenta}</Text>
+                ) : null}
+
+                {cuenta.correo_cuenta ? (
+                  <Text style={styles.accountInfo}>Correo: {cuenta.correo_cuenta}</Text>
+                ) : null}
+
+                {cuenta.rif_cuenta ? (
+                  <Text style={styles.accountInfo}>RIF: {cuenta.rif_cuenta}</Text>
+                ) : null}
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        {selectedCuenta && (
+          <View style={styles.paymentSummaryCard}>
+            <Text style={styles.sectionTitle}>Resumen para pagar</Text>
+            <Text style={styles.summaryText}>Método: {selectedMethod}</Text>
+            <Text style={styles.summaryText}>Banco: {selectedCuenta.nombre_banco}</Text>
+            {selectedCuenta.numero_cuenta ? <Text style={styles.summaryText}>Número: {selectedCuenta.numero_cuenta}</Text> : null}
+            {selectedCuenta.telefono_cuenta ? <Text style={styles.summaryText}>Teléfono: {selectedCuenta.telefono_cuenta}</Text> : null}
+            {selectedCuenta.correo_cuenta ? <Text style={styles.summaryText}>Correo: {selectedCuenta.correo_cuenta}</Text> : null}
+            <Text style={styles.summaryText}>Monto a pagar: {formatCurrency(pedido?.total || pedido?.monto || 0)}</Text>
+
+            <TouchableOpacity style={styles.confirmButton} onPress={handleConfirmPayment}>
+              <Text style={styles.confirmButtonText}>Confirmar pago</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </ScrollView>
-      
-      {renderBankInfoModal()}
-      {renderMobilePaymentModal()}
-      
-      {/* Overlay for dropdown */}
-      {showBankDropdown && (
-        <TouchableOpacity 
-          style={styles.overlay}
-          activeOpacity={1}
-          onPress={() => setShowBankDropdown(false)}
-        />
-      )}
-    </KeyboardAvoidingView>
+
+      <Modal visible={showPaymentForm} transparent animationType="slide" onRequestClose={() => setShowPaymentForm(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.paymentFormContainer}>
+            <View style={styles.formHeader}>
+              <Text style={styles.formTitle}>Registrar {selectedMethod}</Text>
+              <TouchableOpacity onPress={() => setShowPaymentForm(false)}>
+                <Ionicons name="close" size={22} color={COLORS.text} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView contentContainerStyle={styles.formContent} showsVerticalScrollIndicator={false}>
+              {paymentFormFields.map((field) => (
+                <View key={field.key} style={styles.formField}>
+                  <Text style={styles.formLabel}>{field.label}</Text>
+                  <TextInput
+                    style={styles.formInput}
+                    value={paymentForm[field.key]}
+                    onChangeText={(value) => setPaymentForm((previous) => ({ ...previous, [field.key]: value }))}
+                    placeholder={field.placeholder}
+                    keyboardType={field.keyboardType || 'default'}
+                    maxLength={field.maxLength || 200}
+                  />
+                </View>
+              ))}
+
+              <TouchableOpacity style={styles.uploadButton} onPress={handlePickComprobante}>
+                <Ionicons name="image-outline" size={18} color={COLORS.primary} />
+                <Text style={styles.uploadButtonText}>
+                  {paymentForm.comprobanteName ? paymentForm.comprobanteName : 'Adjuntar comprobante'}
+                </Text>
+              </TouchableOpacity>
+
+              {paymentForm.comprobante ? (
+                <Image source={{ uri: paymentForm.comprobante }} style={styles.comprobantePreview} resizeMode="cover" />
+              ) : null}
+
+              <TouchableOpacity style={styles.submitButton} onPress={handleSubmitPaymentForm} disabled={isSubmitting}>
+                <Text style={styles.submitButtonText}>{isSubmitting ? 'Enviando...' : 'Enviar pago'}</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={paymentSuccessVisible}
+        onRequestClose={() => {
+          setPaymentSuccessVisible(false);
+          navigateToPedidos();
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.successModalCard}>
+            <Ionicons name="checkmark-circle" size={52} color={COLORS.success || '#22c55e'} />
+            <Text style={styles.successTitle}>Pago registrado</Text>
+            <Text style={styles.successText}>{paymentSuccessMessage}</Text>
+
+            <TouchableOpacity
+              style={styles.successPrimaryButton}
+              onPress={() => {
+                setPaymentSuccessVisible(false);
+                navigateToPedidos();
+              }}
+            >
+              <Text style={styles.successPrimaryText}>Ver pedidos</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
-    padding: 20,
-    paddingBottom: 30,
+    backgroundColor: '#F5F7FA',
   },
-  scrollContent: {
-    paddingBottom: 30,
-  },
-  title: {
-    ...theme.typography.h4,
-    marginBottom: 24,
-    color: COLORS.text,
-  },
-  paymentMethods: {
-    marginBottom: 24,
-    gap: 16,
-    padding: 4,
-  },
-  paymentMethod: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.white,
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
-    minHeight: 88,
-  },
-  methodIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: 'rgba(25, 118, 210, 0.08)',
+  centered: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
+    backgroundColor: '#F5F7FA',
   },
-  methodTextContainer: {
-    flex: 1,
-  },
-  methodDescription: {
-    ...theme.typography.caption,
-    color: COLORS.textSecondary,
-    marginTop: 4,
-  },
-  paymentMethodText: {
-    ...theme.typography.subtitle,
-    color: COLORS.text,
-    fontSize: 16,
-  },
-  summary: {
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
+  content: {
     padding: 16,
-    marginBottom: 24,
-    ...theme.shadow.sm,
+    paddingBottom: 32,
   },
-  summaryTitle: {
-    ...theme.typography.subtitle,
-    marginBottom: 12,
+  loadingText: {
+    marginTop: 12,
+    color: COLORS.textSecondary,
+    fontSize: 14,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
     color: COLORS.text,
+    marginBottom: 12,
   },
-  summaryRow: {
+  orderCard: {
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 18,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  orderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 8,
   },
-  totalRow: {
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-  },
-  summaryLabel: {
-    ...theme.typography.body2,
+  orderLabel: {
     color: COLORS.textSecondary,
+    fontSize: 13,
   },
-  summaryValue: {
-    ...theme.typography.body2,
+  orderValue: {
     color: COLORS.text,
-  },
-  totalLabel: {
-    ...theme.typography.subtitle,
-    color: COLORS.text,
-    fontWeight: '600',
-  },
-  totalAmount: {
-    ...theme.typography.h6,
-    color: COLORS.primary,
+    fontSize: 13,
     fontWeight: '700',
+    textAlign: 'right',
   },
-  payButtonContainer: {
-    marginTop: 8,
-    alignItems: 'center',
+  methodList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 18,
   },
-  payButton: {
+  methodButton: {
+    backgroundColor: '#E5E7EB',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+    marginBottom: 8,
+  },
+  methodButtonSelected: {
     backgroundColor: COLORS.primary,
+  },
+  methodButtonText: {
+    color: COLORS.text,
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  methodButtonTextSelected: {
+    color: '#fff',
+  },
+  emptyMethods: {
+    color: COLORS.textSecondary,
+    fontSize: 14,
+  },
+  accountList: {
+    marginBottom: 18,
+  },
+  accountCard: {
+    backgroundColor: '#fff',
     borderRadius: 12,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  accountCardSelected: {
+    borderColor: COLORS.primary,
+    backgroundColor: '#F5F9FF',
+  },
+  accountHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
-    ...theme.shadow.sm,
+    marginBottom: 8,
   },
-  payButtonDisabled: {
-    backgroundColor: COLORS.disabled,
+  accountName: {
+    marginLeft: 8,
+    fontWeight: '700',
+    color: COLORS.text,
+    fontSize: 15,
   },
-  payButtonText: {
-    ...theme.typography.button,
-    color: COLORS.white,
-    marginRight: 8,
-  },
-  payButtonIcon: {
-    marginLeft: 4,
-  },
-  securePaymentText: {
-    ...theme.typography.caption,
+  accountInfo: {
     color: COLORS.textSecondary,
-    marginTop: 12,
-    textAlign: 'center',
+    fontSize: 13,
+    marginBottom: 4,
   },
-  overlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'transparent',
+  paymentSummaryCard: {
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  summaryText: {
+    color: COLORS.text,
+    fontSize: 14,
+    marginBottom: 6,
+  },
+  confirmButton: {
+    marginTop: 16,
+    backgroundColor: COLORS.primary,
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  confirmButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  successModalCard: {
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    padding: 22,
+    marginHorizontal: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  successTitle: {
+    marginTop: 12,
+    fontSize: 20,
+    fontWeight: '800',
+    color: COLORS.text,
+  },
+  successText: {
+    marginTop: 10,
+    color: COLORS.textSecondary,
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  successPrimaryButton: {
+    marginTop: 18,
+    backgroundColor: COLORS.primary,
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    width: '100%',
+    alignItems: 'center',
+  },
+  successPrimaryText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 14,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(15, 23, 42, 0.5)',
     justifyContent: 'flex-end',
   },
-  bankModalContent: {
-    backgroundColor: COLORS.white,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+  paymentFormContainer: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
     maxHeight: '90%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 5,
+    paddingBottom: 20,
   },
-  modalHeader: {
+  formHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: '#E5E7EB',
   },
-  bankModalTitle: {
-    ...theme.typography.h5,
+  formTitle: {
+    fontSize: 18,
+    fontWeight: '700',
     color: COLORS.text,
-    fontWeight: '600',
   },
-  closeButton: {
-    padding: 4,
+  formContent: {
+    paddingHorizontal: 18,
+    paddingTop: 16,
+    paddingBottom: 8,
   },
-  bankModalBody: {
-    padding: 20,
-    maxHeight: '80%',
-  },
-  formGroup: {
+  formField: {
     marginBottom: 16,
   },
-  inputLabel: {
-    ...theme.typography.caption,
+  formLabel: {
+    fontSize: 13,
+    fontWeight: '600',
     color: COLORS.textSecondary,
     marginBottom: 8,
-    marginLeft: 4,
   },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.background,
-    borderRadius: 12,
+  formInput: {
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 10,
+    backgroundColor: '#F9FAFB',
     paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  inputContainerError: {
-    borderColor: COLORS.danger,
-  },
-  inputIcon: {
-    marginRight: 8,
-  },
-  input: {
-    flex: 1,
-    height: 48,
-    ...theme.typography.body2,
+    paddingVertical: 12,
     color: COLORS.text,
+    fontSize: 14,
   },
-  fieldErrorText: {
-    ...theme.typography.caption,
-    color: COLORS.danger,
-    marginTop: 4,
-    marginLeft: 4,
+  uploadButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    marginBottom: 14,
+    backgroundColor: '#EEF4FF',
   },
-  selectContainer: {
-    marginBottom: 8,
-    position: 'relative',
-    zIndex: 10,
+  uploadButtonText: {
+    marginLeft: 8,
+    color: COLORS.primary,
+    fontWeight: '600',
+    flexShrink: 1,
   },
-  dropdownContainer: {
+  comprobantePreview: {
     width: '100%',
-    maxHeight: 250,
-    backgroundColor: COLORS.white,
+    height: 180,
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    marginTop: 8,
     marginBottom: 16,
-    ...theme.shadow.sm,
+    backgroundColor: '#F3F4F6',
   },
-  dropdownScroll: {
-    maxHeight: 200,
-  },
-  searchContainer: {
-    flexDirection: 'row',
+  submitButton: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 10,
+    paddingVertical: 14,
     alignItems: 'center',
-    padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderLight,
   },
-  searchIcon: {
-    marginRight: 8,
-  },
-  searchInput: {
-    flex: 1,
-    ...theme.typography.body2,
-    color: COLORS.text,
-    padding: 0,
-    margin: 0,
-  },
-  clearButton: {
-    padding: 4,
-    marginLeft: 8,
-  },
-  dropdownItem: {
-    padding: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderLight,
-    minHeight: 48,
-  },
-  dropdownItemSelected: {
-    backgroundColor: 'rgba(25, 118, 210, 0.08)',
-  },
-  dropdownItemText: {
-    ...theme.typography.body2,
-    color: COLORS.text,
-    flex: 1,
-  },
-  dropdownItemTextSelected: {
-    color: COLORS.primary,
-    fontWeight: '600',
-  },
-  selectWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.background,
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    minHeight: 48,
-  },
-  selectText: {
-    ...theme.typography.body2,
-    color: COLORS.text,
-    flex: 1,
-  },
-  bankAccountCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    ...theme.shadow.sm,
-  },
-  bankHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  bankName: {
-    ...theme.typography.subtitle,
-    color: COLORS.text,
-    marginLeft: 8,
-    fontWeight: '600',
-  },
-  infoGrid: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: 12,
-  },
-  infoLabel: {
-    ...theme.typography.caption,
-    color: COLORS.textSecondary,
-  },
-  infoValue: {
-    ...theme.typography.body2,
-    color: COLORS.text,
-  },
-  infoValueLink: {
-    ...theme.typography.body2,
-    color: COLORS.primary,
-    textDecorationLine: 'underline',
-  },
-  noteContainer: {
-    backgroundColor: 'rgba(25, 118, 210, 0.08)',
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 16,
-    borderLeftWidth: 4,
-    borderLeftColor: COLORS.primary,
-  },
-  noteTitle: {
-    ...theme.typography.subtitle2,
-    color: COLORS.primary,
-    marginBottom: 4,
-    fontWeight: '600',
-  },
-  noteText: {
-    ...theme.typography.body2,
-    color: COLORS.text,
+  submitButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 15,
   },
 });
 

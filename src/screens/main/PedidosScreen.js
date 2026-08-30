@@ -7,9 +7,13 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   RefreshControl,
+  Linking,
+  Platform,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { useSelector } from 'react-redux';
 import COLORS from '../../constants/colors';
+import { API_BASE_URL } from '../../config/apiConfig';
 import { InvocarMetodo } from '../../utils/comunicadorApi';
 
 const formatCurrency = (value) => {
@@ -113,10 +117,21 @@ const normalizePedido = (item = {}) => {
     acciones: item.acciones ?? {
       pagar: String(estado).toLowerCase().includes('borrador'),
       esperar_pago: String(estado).toLowerCase().includes('proceso'),
-      descargar_factura: String(estado).toLowerCase().includes('pagado'),
+      descargar_factura: [
+        'pagado',
+        'pago procesado',
+        'pago-procesado',
+        'procesado',
+      ].some((keyword) => String(estado).toLowerCase().includes(keyword)),
     },
     mensaje: item.mensaje ?? 'Pedido registrado.',
   };
+};
+
+const isFacturaDescargable = (estado = '') => {
+  const normalized = String(estado || '').trim().toLowerCase();
+
+  return normalized === 'pago procesado' || normalized === 'pago-procesado';
 };
 
 const extractFacturasFromResponse = (payload) => {
@@ -151,8 +166,9 @@ const extractFacturasFromResponse = (payload) => {
   return [];
 };
 
-const PedidoCard = ({ pedido, onPress }) => {
+const PedidoCard = ({ pedido, onPress, onDownload }) => {
   const estado = String(pedido.estado || '').toLowerCase();
+  const canDownload = isFacturaDescargable(pedido.estado);
 
   let actionLabel = 'Ver detalle';
   let actionStyle = styles.secondaryAction;
@@ -161,11 +177,8 @@ const PedidoCard = ({ pedido, onPress }) => {
     actionLabel = 'Pagar';
     actionStyle = styles.primaryAction;
   } else if (estado.includes('proceso')) {
-    actionLabel = 'En revisión';
-    actionStyle = styles.warningAction;
-  } else if (estado.includes('pagado')) {
-    actionLabel = 'Descargar';
-    actionStyle = styles.successAction;
+    actionLabel = canDownload ? 'Descargar' : 'En revisión';
+    actionStyle = canDownload ? styles.successAction : styles.warningAction;
   }
 
   return (
@@ -209,14 +222,14 @@ const PedidoCard = ({ pedido, onPress }) => {
         </TouchableOpacity>
       )}
 
-      {estado.includes('proceso') && (
+      {estado.includes('proceso') && !canDownload && (
         <View style={styles.infoBox}>
           <Text style={styles.infoText}>El pago está siendo validado por un administrador.</Text>
         </View>
       )}
 
-      {estado.includes('pagado') && (
-        <TouchableOpacity style={[styles.actionButton, actionStyle]} onPress={() => onPress?.(pedido)}>
+      {canDownload && (
+        <TouchableOpacity style={[styles.actionButton, actionStyle]} onPress={() => onDownload?.(pedido)}>
           <Text style={styles.actionText}>{actionLabel}</Text>
         </TouchableOpacity>
       )}
@@ -225,6 +238,7 @@ const PedidoCard = ({ pedido, onPress }) => {
 };
 
 const PedidosScreen = () => {
+  const navigation = useNavigation();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [pedidos, setPedidos] = useState([]);
@@ -298,6 +312,31 @@ const PedidosScreen = () => {
     }, {});
   }, [pedidos]);
 
+  const handleDownloadFactura = async (pedidoSeleccionado) => {
+    try {
+      const idFactura = pedidoSeleccionado?.id_factura ?? pedidoSeleccionado?.id ?? pedidoSeleccionado?.numero;
+      if (!idFactura) {
+        console.warn('[Pedidos] No hay id de factura para descargar');
+        return;
+      }
+
+      const url = `${API_BASE_URL}/descargarFactura.php?id_factura=${encodeURIComponent(idFactura)}`;
+
+      if (Platform.OS === 'web') {
+        const link = document.createElement('a');
+        link.href = url;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.click();
+        return;
+      }
+
+      await Linking.openURL(url);
+    } catch (error) {
+      console.error('[Pedidos] Error al descargar factura:', error);
+    }
+  };
+
   const renderGroup = ({ item }) => {
     const [groupKey, groupList] = item;
 
@@ -309,8 +348,19 @@ const PedidosScreen = () => {
             key={pedido.id}
             pedido={pedido}
             onPress={(pedidoSeleccionado) => {
+              if (String(pedidoSeleccionado.estado || '').toLowerCase().includes('borrador')) {
+                navigation.navigate('Payment', { pedido: pedidoSeleccionado });
+                return;
+              }
+
+              if (isFacturaDescargable(pedidoSeleccionado.estado)) {
+                handleDownloadFactura(pedidoSeleccionado);
+                return;
+              }
+
               console.log('[Pedidos] Ver detalle del pedido:', pedidoSeleccionado);
             }}
+            onDownload={handleDownloadFactura}
           />
         ))}
       </View>

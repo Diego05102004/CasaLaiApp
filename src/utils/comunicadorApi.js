@@ -8,6 +8,7 @@ import { secureGet, securePost, securePut, secureDelete, API_SCHEMAS } from './a
 const OPERATIONS = {
   login: { method: 'POST', schema: API_SCHEMAS.login, useFunctionParam: false },
   registro: { method: 'POST', useFunctionParam: false },
+  pago_ingresar: { method: 'POST', useFunctionParam: false },
   default: { method: 'GET', schema: API_SCHEMAS.getProducts, useFunctionParam: true },
   por_id: { method: 'GET', schema: API_SCHEMAS.getProducts, useFunctionParam: true },
   por_categoria: { method: 'GET', schema: API_SCHEMAS.getProducts, useFunctionParam: true },
