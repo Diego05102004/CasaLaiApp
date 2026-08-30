@@ -41,7 +41,8 @@
           ]
         }
       ],
-      "package": "com.casalai.app"
+      "package": "com.casalai.app",
+      "usesCleartextTraffic": true
     },
     "web": {
       "favicon": "./src/assets/images/LOGO.png"

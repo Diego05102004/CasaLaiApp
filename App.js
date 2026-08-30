@@ -8,6 +8,7 @@ import { PersistGate } from 'redux-persist/integration/react';
 import { NavigationContainer } from '@react-navigation/native';
 import { store, persistor } from './src/redux/store';
 import AppNavigator from './src/navigation/AppNavigator';
+//import TestApiScreen from './src/components/TestApiScreen';
 import { checkAuth, refreshAuthSession } from './src/redux/slices/authSlice';
 import COLORS from './src/constants/colors';
 
@@ -33,6 +34,7 @@ const AppContent = () => {
   }
 
   return <AppNavigator />;
+  //return <TestApiScreen />;
 };
 
 const App = () => {
