@@ -1,57 +1,73 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, Platform, Alert, ScrollView, TextInput, Modal } from 'react-native';
 import { useSelector } from 'react-redux';
-import { ImagePicker } from 'expo';
+import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import COLORS from '../../constants/colors';
 import theme from '../../constants/theme';
-import { useNavigation } from '@react-navigation/native';
+
+import {
+  filterUsername,
+  filterAlpha,
+  formatPhoneNumber,
+  validateUsername,
+  validateName,
+  validateLastName,
+  validatePhone,
+  validateEmail,
+  validatePassword,
+  validateConfirmPassword,
+  validateProfileImage,
+} from '../../validation/profileValidation';
 
 const ProfileScreen = () => {
   const { user } = useSelector((state) => state.auth);
-  const navigation = useNavigation();
 
-  // Estados para foto de perfil y modal
+  // Estados para foto de perfil
   const [profileImage, setProfileImage] = useState(null);
+  const [selectedAsset, setSelectedAsset] = useState(null);
   const [tempImage, setTempImage] = useState(null);
   const [isPhotoModalVisible, setIsPhotoModalVisible] = useState(false);
 
-  // Estados de edición para cada recuadro/sección
+  // Estados de edición
   const [isEditingPersonal, setIsEditingPersonal] = useState(false);
   const [isEditingEmail, setIsEditingEmail] = useState(false);
   const [isEditingPassword, setIsEditingPassword] = useState(false);
 
-  // Campos Información Personal
+  // Campos de Información Personal
   const [username, setUsername] = useState(user?.username || user?.nombre_usuario || '');
   const [name, setName] = useState(user?.name || user?.nombre || '');
   const [lastName, setLastName] = useState(user?.lastName || user?.apellido || '');
   const [phone, setPhone] = useState(user?.phone || user?.telefono || '');
 
-  // Campos Cambio de Correo
+  const [errorsPersonal, setErrorsPersonal] = useState({});
+
+  // Campos de Cambio de Correo
   const [newEmail, setNewEmail] = useState('');
   const [currentPasswordForEmail, setCurrentPasswordForEmail] = useState('');
+  const [errorsEmail, setErrorsEmail] = useState({});
 
-  // Campos Cambio de Contraseña
+  // Campos de Cambio de Contraseña
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [errorsPassword, setErrorsPassword] = useState({});
 
+  // SOLUCIÓN AL RESETEO IMPREVISTO: Solo sincronizar si no se está editando activamente
   useEffect(() => {
-    if (user) {
+    if (user && !isEditingPersonal) {
       setUsername(user.username || user.nombre_usuario || '');
       setName(user.name || user.nombre || '');
       setLastName(user.lastName || user.apellido || '');
       setPhone(user.phone || user.telefono || '');
     }
-  }, [user]);
+  }, [user, isEditingPersonal]);
 
-  // Abrir Modal de Cambio de Foto
   const handleOpenPhotoModal = () => {
     setTempImage(profileImage);
     setIsPhotoModalVisible(true);
   };
 
-  // Seleccionar foto desde la galería
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     
@@ -61,54 +77,143 @@ const ProfileScreen = () => {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
     });
 
-    if (!result.cancelled) {
-      setTempImage(result.uri);
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      const asset = result.assets[0];
+      const sizeError = validateProfileImage(asset);
+      if (sizeError) {
+        Alert.alert('Error', sizeError);
+        return;
+      }
+      setSelectedAsset(asset);
+      setTempImage(asset.uri);
     }
   };
 
-  // Guardar Foto de Perfil
   const handleSavePhoto = () => {
-    setProfileImage(tempImage);
-    setIsPhotoModalVisible(false);
-    Alert.alert('¡Listo!', 'Foto de perfil actualizada correctamente');
-  };
-
-  const handleSavePersonal = () => {
-    setIsEditingPersonal(false);
-    Alert.alert('¡Listo!', 'Tus datos personales han sido actualizados');
-  };
-
-  const handleSaveEmail = () => {
-    if (!newEmail || !currentPasswordForEmail) {
-      Alert.alert('Error', 'Por favor completa todos los campos del correo');
+    if (!selectedAsset && !tempImage) {
+      Alert.alert('Error', 'Debes seleccionar una imagen');
       return;
     }
+    setProfileImage(tempImage);
+    setIsPhotoModalVisible(false);
+    Alert.alert('¡Éxito!', 'Foto de perfil actualizada correctamente');
+  };
+
+  // Manejadores con filtro en tiempo real (Keypress adaptado)
+  const handleChangeUsername = (text) => {
+    const filtered = filterUsername(text);
+    setUsername(filtered);
+    setErrorsPersonal((prev) => ({ ...prev, username: validateUsername(filtered) }));
+  };
+
+  const handleChangeName = (text) => {
+    const filtered = filterAlpha(text);
+    setName(filtered);
+    setErrorsPersonal((prev) => ({ ...prev, name: validateName(filtered) }));
+  };
+
+  const handleChangeLastName = (text) => {
+    const filtered = filterAlpha(text);
+    setLastName(filtered);
+    setErrorsPersonal((prev) => ({ ...prev, lastName: validateLastName(filtered) }));
+  };
+
+  const handleChangePhone = (text) => {
+    const formatted = formatPhoneNumber(text);
+    setPhone(formatted);
+    setErrorsPersonal((prev) => ({ ...prev, phone: validatePhone(formatted) }));
+  };
+
+  const handleChangeNewEmail = (text) => {
+    setNewEmail(text);
+    setErrorsEmail((prev) => ({ ...prev, newEmail: validateEmail(text) }));
+  };
+
+  const handleChangeNewPassword = (text) => {
+    setNewPassword(text);
+    setErrorsPassword((prev) => ({
+      ...prev,
+      newPassword: validatePassword(text),
+      confirmPassword: validateConfirmPassword(text, confirmPassword),
+    }));
+  };
+
+  const handleChangeConfirmPassword = (text) => {
+    setConfirmPassword(text);
+    setErrorsPassword((prev) => ({
+      ...prev,
+      confirmPassword: validateConfirmPassword(newPassword, text),
+    }));
+  };
+
+  // Guardar Información Personal
+  const handleSavePersonal = () => {
+    const errUsername = validateUsername(username);
+    const errName = validateName(name);
+    const errLastName = validateLastName(lastName);
+    const errPhone = validatePhone(phone);
+
+    if (errUsername || errName || errLastName || errPhone) {
+      setErrorsPersonal({
+        username: errUsername,
+        name: errName,
+        lastName: errLastName,
+        phone: errPhone,
+      });
+      Alert.alert('Error', 'Por favor corrige los campos señalados');
+      return;
+    }
+
+    setIsEditingPersonal(false);
+    Alert.alert('¡Éxito!', 'Tus datos personales han sido actualizados');
+  };
+
+  // Guardar Correo
+  const handleSaveEmail = () => {
+    const errEmail = validateEmail(newEmail);
+    if (errEmail || !currentPasswordForEmail) {
+      setErrorsEmail({
+        newEmail: errEmail,
+        currentPasswordForEmail: !currentPasswordForEmail ? 'Ingresa tu contraseña actual' : '',
+      });
+      Alert.alert('Error', 'Por favor completa y corrige los campos del correo');
+      return;
+    }
+
     setIsEditingEmail(false);
     setNewEmail('');
     setCurrentPasswordForEmail('');
-    Alert.alert('¡Listo!', 'Tu correo electrónico ha sido actualizado');
+    setErrorsEmail({});
+    Alert.alert('¡Éxito!', 'Tu correo electrónico ha sido actualizado');
   };
 
+  // Guardar Contraseña
   const handleSavePassword = () => {
-    if (!currentPassword || !newPassword || !confirmPassword) {
-      Alert.alert('Error', 'Por favor completa todos los campos de contraseña');
+    const errNewPassword = validatePassword(newPassword);
+    const errConfirmPassword = validateConfirmPassword(newPassword, confirmPassword);
+
+    if (!currentPassword || errNewPassword || errConfirmPassword) {
+      setErrorsPassword({
+        currentPassword: !currentPassword ? 'Ingresa tu contraseña actual' : '',
+        newPassword: errNewPassword,
+        confirmPassword: errConfirmPassword,
+      });
+      Alert.alert('Error', 'Por favor revisa los campos de contraseña');
       return;
     }
-    if (newPassword !== confirmPassword) {
-      Alert.alert('Error', 'Las contraseñas no coinciden');
-      return;
-    }
+
     setIsEditingPassword(false);
     setCurrentPassword('');
     setNewPassword('');
     setConfirmPassword('');
-    Alert.alert('¡Listo!', 'Tu contraseña ha sido actualizada');
+    setErrorsPassword({});
+    Alert.alert('¡Éxito!', 'Tu contraseña ha sido actualizada');
   };
 
   const renderUserField = (label, value) => (
@@ -138,23 +243,20 @@ const ProfileScreen = () => {
             <Ionicons name="camera" size={18} color={COLORS.white} />
           </View>
         </TouchableOpacity>
-        
+
         <Text style={styles.userName}>
           {user?.name || user?.nombre || 'Casa'} {user?.lastName || user?.apellido || 'Lai'}
         </Text>
         <Text style={styles.userEmail}>@{user?.username || user?.nombre_usuario || 'CasaLai'}</Text>
       </View>
-      
+
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         {/* RECUADRO 1: INFORMACIÓN PERSONAL */}
         <View style={styles.infoContainer}>
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionTitle}>Información Personal</Text>
             {!isEditingPersonal && (
-              <TouchableOpacity 
-                style={styles.editButton} 
-                onPress={() => setIsEditingPersonal(true)}
-              >
+              <TouchableOpacity style={styles.editButton} onPress={() => setIsEditingPersonal(true)}>
                 <Ionicons name="pencil" size={18} color={COLORS.primary} />
               </TouchableOpacity>
             )}
@@ -165,58 +267,62 @@ const ProfileScreen = () => {
               <View style={styles.inputBlock}>
                 <Text style={styles.infoLabel}>Nombre de Usuario</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, errorsPersonal.username && styles.inputError]}
                   value={username}
-                  onChangeText={setUsername}
-                  placeholder="CasaLai"
+                  onChangeText={handleChangeUsername}
+                  placeholder="Mínimo 4 caracteres"
+                  autoCapitalize="none"
                 />
+                {errorsPersonal.username ? <Text style={styles.errorText}>{errorsPersonal.username}</Text> : null}
               </View>
 
               <View style={styles.inputBlock}>
                 <Text style={styles.infoLabel}>Nombres</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, errorsPersonal.name && styles.inputError]}
                   value={name}
-                  onChangeText={setName}
-                  placeholder="Casa"
+                  onChangeText={handleChangeName}
+                  placeholder="2 primeros nombres"
                 />
+                {errorsPersonal.name ? <Text style={styles.errorText}>{errorsPersonal.name}</Text> : null}
               </View>
 
               <View style={styles.inputBlock}>
                 <Text style={styles.infoLabel}>Apellidos</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, errorsPersonal.lastName && styles.inputError]}
                   value={lastName}
-                  onChangeText={setLastName}
-                  placeholder="Lai"
+                  onChangeText={handleChangeLastName}
+                  placeholder="2 primeros apellidos"
                 />
+                {errorsPersonal.lastName ? <Text style={styles.errorText}>{errorsPersonal.lastName}</Text> : null}
               </View>
 
               <View style={styles.inputBlock}>
                 <Text style={styles.infoLabel}>Teléfono</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, errorsPersonal.phone && styles.inputError]}
                   value={phone}
-                  onChangeText={setPhone}
-                  placeholder="0414-575-3363"
+                  onChangeText={handleChangePhone}
+                  keyboardType="numeric"
+                  placeholder="Formato: 0400-000-0000"
                 />
+                {errorsPersonal.phone ? <Text style={styles.errorText}>{errorsPersonal.phone}</Text> : null}
               </View>
 
               <View style={styles.cardActions}>
-                <TouchableOpacity 
-                  style={styles.saveGreenButton}
-                  onPress={handleSavePersonal}
-                >
+                <TouchableOpacity style={styles.saveGreenButton} onPress={handleSavePersonal}>
                   <Ionicons name="save-outline" size={16} color={COLORS.white} style={styles.buttonIcon} />
                   <Text style={styles.saveButtonText}>Guardar</Text>
                 </TouchableOpacity>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.cancelGrayButton}
                   onPress={() => {
                     setUsername(user?.username || user?.nombre_usuario || '');
                     setName(user?.name || user?.nombre || '');
                     setLastName(user?.lastName || user?.apellido || '');
                     setPhone(user?.phone || user?.telefono || '');
+                    setErrorsPersonal({});
                     setIsEditingPersonal(false);
                   }}
                 >
@@ -239,8 +345,8 @@ const ProfileScreen = () => {
         {/* RECUADRO 2: CONFIGURACIÓN DE CUENTA */}
         <View style={styles.infoContainer}>
           <Text style={styles.sectionTitle}>Configuración de Cuenta</Text>
-          
-          {/* SECCIÓN DE CORREO ELECTRÓNICO */}
+
+          {/* CAMBIO DE CORREO */}
           <View style={styles.accountSubSection}>
             <View style={styles.fieldHeaderRow}>
               <Text style={styles.subSectionTitle}>Correo Electrónico</Text>
@@ -265,41 +371,44 @@ const ProfileScreen = () => {
                 <View style={styles.inputBlock}>
                   <Text style={styles.infoLabel}>Nuevo Correo</Text>
                   <TextInput
-                    style={styles.input}
+                    style={[styles.input, errorsEmail.newEmail && styles.inputError]}
                     value={newEmail}
-                    onChangeText={setNewEmail}
+                    onChangeText={handleChangeNewEmail}
                     keyboardType="email-address"
                     autoCapitalize="none"
                     placeholder="Formato: correo@gmail.com"
-                    placeholderTextColor="#999"
                   />
+                  {errorsEmail.newEmail ? <Text style={styles.errorText}>{errorsEmail.newEmail}</Text> : null}
                 </View>
 
                 <View style={styles.inputBlock}>
                   <Text style={styles.infoLabel}>Contraseña Actual</Text>
                   <TextInput
-                    style={styles.input}
+                    style={[styles.input, errorsEmail.currentPasswordForEmail && styles.inputError]}
                     value={currentPasswordForEmail}
-                    onChangeText={setCurrentPasswordForEmail}
+                    onChangeText={(t) => {
+                      setCurrentPasswordForEmail(t);
+                      setErrorsEmail((prev) => ({ ...prev, currentPasswordForEmail: '' }));
+                    }}
                     secureTextEntry
                     placeholder="Ingresa tu contraseña para confirmar"
-                    placeholderTextColor="#999"
                   />
+                  {errorsEmail.currentPasswordForEmail ? (
+                    <Text style={styles.errorText}>{errorsEmail.currentPasswordForEmail}</Text>
+                  ) : null}
                 </View>
 
                 <View style={styles.cardActions}>
-                  <TouchableOpacity 
-                    style={styles.saveGreenButton}
-                    onPress={handleSaveEmail}
-                  >
+                  <TouchableOpacity style={styles.saveGreenButton} onPress={handleSaveEmail}>
                     <Ionicons name="mail-outline" size={16} color={COLORS.white} style={styles.buttonIcon} />
                     <Text style={styles.saveButtonText}>Actualizar Correo</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.cancelGrayButton}
                     onPress={() => {
                       setNewEmail('');
                       setCurrentPasswordForEmail('');
+                      setErrorsEmail({});
                       setIsEditingEmail(false);
                     }}
                   >
@@ -315,7 +424,7 @@ const ProfileScreen = () => {
             )}
           </View>
 
-          {/* SECCIÓN DE CONTRASEÑA */}
+          {/* CAMBIO DE CONTRASEÑA */}
           <View style={styles.accountSubSectionLast}>
             <View style={styles.fieldHeaderRow}>
               <Text style={styles.subSectionTitle}>Contraseña</Text>
@@ -331,53 +440,58 @@ const ProfileScreen = () => {
                 <View style={styles.inputBlock}>
                   <Text style={styles.infoLabel}>Contraseña Actual</Text>
                   <TextInput
-                    style={styles.input}
+                    style={[styles.input, errorsPassword.currentPassword && styles.inputError]}
                     value={currentPassword}
-                    onChangeText={setCurrentPassword}
+                    onChangeText={(t) => {
+                      setCurrentPassword(t);
+                      setErrorsPassword((prev) => ({ ...prev, currentPassword: '' }));
+                    }}
                     secureTextEntry
                     placeholder="Ingresa tu contraseña actual"
-                    placeholderTextColor="#999"
                   />
+                  {errorsPassword.currentPassword ? (
+                    <Text style={styles.errorText}>{errorsPassword.currentPassword}</Text>
+                  ) : null}
                 </View>
 
                 <View style={styles.inputBlock}>
                   <Text style={styles.infoLabel}>Nueva Contraseña</Text>
                   <TextInput
-                    style={styles.input}
+                    style={[styles.input, errorsPassword.newPassword && styles.inputError]}
                     value={newPassword}
-                    onChangeText={setNewPassword}
+                    onChangeText={handleChangeNewPassword}
                     secureTextEntry
                     placeholder="6-15 caracteres (May, Num, C.Especial) x1"
-                    placeholderTextColor="#999"
                   />
+                  {errorsPassword.newPassword ? <Text style={styles.errorText}>{errorsPassword.newPassword}</Text> : null}
                 </View>
 
                 <View style={styles.inputBlock}>
                   <Text style={styles.infoLabel}>Confirmar Nueva Contraseña</Text>
                   <TextInput
-                    style={styles.input}
+                    style={[styles.input, errorsPassword.confirmPassword && styles.inputError]}
                     value={confirmPassword}
-                    onChangeText={setConfirmPassword}
+                    onChangeText={handleChangeConfirmPassword}
                     secureTextEntry
                     placeholder="Confirma tu nueva contraseña"
-                    placeholderTextColor="#999"
                   />
+                  {errorsPassword.confirmPassword ? (
+                    <Text style={styles.errorText}>{errorsPassword.confirmPassword}</Text>
+                  ) : null}
                 </View>
 
                 <View style={styles.cardActions}>
-                  <TouchableOpacity 
-                    style={styles.saveGreenButton}
-                    onPress={handleSavePassword}
-                  >
+                  <TouchableOpacity style={styles.saveGreenButton} onPress={handleSavePassword}>
                     <Ionicons name="lock-closed-outline" size={16} color={COLORS.white} style={styles.buttonIcon} />
                     <Text style={styles.saveButtonText}>Actualizar Contraseña</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.cancelGrayButton}
                     onPress={() => {
                       setCurrentPassword('');
                       setNewPassword('');
                       setConfirmPassword('');
+                      setErrorsPassword({});
                       setIsEditingPassword(false);
                     }}
                   >
@@ -572,6 +686,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.text,
   },
+  inputError: {
+    borderColor: '#DC3545',
+  },
+  errorText: {
+    color: '#DC3545',
+    fontSize: 11,
+    marginTop: 3,
+    fontStyle: 'italic',
+  },
   disabledInput: {
     backgroundColor: '#E9ECEF',
     color: '#6C757D',
@@ -629,7 +752,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
   },
-  // ESTILOS MODAL FOTO
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
