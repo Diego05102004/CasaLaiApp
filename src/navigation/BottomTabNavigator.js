@@ -65,11 +65,21 @@ const BottomTabNavigator = () => {
         ...tabBarOptions,
         tabBarIcon: ({ focused, color, size }) => {
           if (route.name === 'Inicio') {
-            return <Ionicons
-                     name={focused ? 'home' : 'home-outline'}
-                     size={size}
-                     color={color}
-                   />;
+            return (
+              <Ionicons
+                name={focused ? 'home' : 'home-outline'}
+                size={size}
+                color={color}
+              />
+            );
+          } else if (route.name === 'Pedidos') {
+            return (
+              <Ionicons
+                name={focused ? 'receipt' : 'receipt-outline'}
+                size={size}
+                color={color}
+              />
+            );
           } else if (route.name === 'Carrito') {
             return <CartIconWithBadge focused={focused} color={color} size={size} />;
           }
