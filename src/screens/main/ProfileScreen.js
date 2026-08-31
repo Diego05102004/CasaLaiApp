@@ -34,11 +34,19 @@ const ProfileScreen = () => {
   const [isEditingEmail, setIsEditingEmail] = useState(false);
   const [isEditingPassword, setIsEditingPassword] = useState(false);
 
+  // Mapeo dinámico soportando nombres de columnas de tbl_usuarios y camelCase
+  const getUserUsername = () => user?.username || user?.nombre_usuario || '';
+  const getUserNombres = () => user?.nombres || user?.nombre || user?.name || '';
+  const getUserApellidos = () => user?.apellidos || user?.apellido || user?.lastName || '';
+  const getUserTelefono = () => user?.telefono || user?.phone || '';
+  const getUserCorreo = () => user?.correo || user?.email || '';
+  const getUserCedula = () => user?.cedula || '';
+
   // Campos de Información Personal
-  const [username, setUsername] = useState(user?.username || user?.nombre_usuario || '');
-  const [name, setName] = useState(user?.name || user?.nombre || '');
-  const [lastName, setLastName] = useState(user?.lastName || user?.apellido || '');
-  const [phone, setPhone] = useState(user?.phone || user?.telefono || '');
+  const [username, setUsername] = useState(getUserUsername());
+  const [name, setName] = useState(getUserNombres());
+  const [lastName, setLastName] = useState(getUserApellidos());
+  const [phone, setPhone] = useState(getUserTelefono());
 
   const [errorsPersonal, setErrorsPersonal] = useState({});
 
@@ -53,13 +61,13 @@ const ProfileScreen = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [errorsPassword, setErrorsPassword] = useState({});
 
-  // SOLUCIÓN AL RESETEO IMPREVISTO: Solo sincronizar si no se está editando activamente
+  // Sincronización limpia con el store sin reseteos imprevistos mientras se edita
   useEffect(() => {
     if (user && !isEditingPersonal) {
-      setUsername(user.username || user.nombre_usuario || '');
-      setName(user.name || user.nombre || '');
-      setLastName(user.lastName || user.apellido || '');
-      setPhone(user.phone || user.telefono || '');
+      setUsername(getUserUsername());
+      setName(getUserNombres());
+      setLastName(getUserApellidos());
+      setPhone(getUserTelefono());
     }
   }, [user, isEditingPersonal]);
 
@@ -105,7 +113,7 @@ const ProfileScreen = () => {
     Alert.alert('¡Éxito!', 'Foto de perfil actualizada correctamente');
   };
 
-  // Manejadores con filtro en tiempo real (Keypress adaptado)
+  // Manejadores de cambios
   const handleChangeUsername = (text) => {
     const filtered = filterUsername(text);
     setUsername(filtered);
@@ -235,7 +243,7 @@ const ProfileScreen = () => {
           ) : (
             <View style={styles.avatar}>
               <Text style={styles.avatarText}>
-                {user?.name?.charAt(0)?.toUpperCase() || user?.nombre?.charAt(0)?.toUpperCase() || 'C'}
+                {getUserNombres().charAt(0)?.toUpperCase() || getUserUsername().charAt(0)?.toUpperCase() || 'E'}
               </Text>
             </View>
           )}
@@ -245,9 +253,9 @@ const ProfileScreen = () => {
         </TouchableOpacity>
 
         <Text style={styles.userName}>
-          {user?.name || user?.nombre || 'Casa'} {user?.lastName || user?.apellido || 'Lai'}
+          {getUserNombres()} {getUserApellidos()}
         </Text>
-        <Text style={styles.userEmail}>@{user?.username || user?.nombre_usuario || 'CasaLai'}</Text>
+        <Text style={styles.userEmail}>@{getUserUsername()}</Text>
       </View>
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
@@ -318,10 +326,10 @@ const ProfileScreen = () => {
                 <TouchableOpacity
                   style={styles.cancelGrayButton}
                   onPress={() => {
-                    setUsername(user?.username || user?.nombre_usuario || '');
-                    setName(user?.name || user?.nombre || '');
-                    setLastName(user?.lastName || user?.apellido || '');
-                    setPhone(user?.phone || user?.telefono || '');
+                    setUsername(getUserUsername());
+                    setName(getUserNombres());
+                    setLastName(getUserApellidos());
+                    setPhone(getUserTelefono());
                     setErrorsPersonal({});
                     setIsEditingPersonal(false);
                   }}
@@ -337,7 +345,7 @@ const ProfileScreen = () => {
               {renderUserField('Nombres', name)}
               {renderUserField('Apellidos', lastName)}
               {renderUserField('Teléfono', phone)}
-              {renderUserField('Cédula', user?.cedula || '30456789')}
+              {renderUserField('Cédula', getUserCedula())}
             </>
           )}
         </View>
@@ -363,7 +371,7 @@ const ProfileScreen = () => {
                   <Text style={styles.infoLabel}>Correo Actual</Text>
                   <TextInput
                     style={[styles.input, styles.disabledInput]}
-                    value={user?.email || user?.correo || 'diego0510lopez@gmail.com'}
+                    value={getUserCorreo()}
                     editable={false}
                   />
                 </View>
@@ -419,7 +427,7 @@ const ProfileScreen = () => {
               </View>
             ) : (
               <View style={styles.fieldContainer}>
-                <Text style={styles.infoValue}>{user?.email || user?.correo || 'diego0510lopez@gmail.com'}</Text>
+                <Text style={styles.infoValue}>{getUserCorreo() || 'No disponible'}</Text>
               </View>
             )}
           </View>
@@ -532,7 +540,7 @@ const ProfileScreen = () => {
                 ) : (
                   <View style={styles.modalAvatarPlaceholder}>
                     <Text style={styles.modalAvatarText}>
-                      {user?.name?.charAt(0)?.toUpperCase() || user?.nombre?.charAt(0)?.toUpperCase() || 'C'}
+                      {getUserNombres().charAt(0)?.toUpperCase() || 'E'}
                     </Text>
                   </View>
                 )}
