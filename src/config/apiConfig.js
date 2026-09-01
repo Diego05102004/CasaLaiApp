@@ -9,7 +9,7 @@
  // export const API_BASE_URL = 'https://casalai.infinityfree.me/api';
 
 // Para desarrollo local (XAMPP localhost)
- export const API_BASE_URL = 'http://localhost/Repositorio%20de%20GITHUB/proyecto-casalai-main/proyecto-casalai-ca/api';
+ export const API_BASE_URL = 'http://localhost/proyecto-casalai-ca/api';
 
 // Configuración adicional de la API
 export const API_CONFIG = {
