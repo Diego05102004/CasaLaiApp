@@ -18,18 +18,22 @@ const getProductImage = (imageName) => {
 
 const ProductCard = ({ product }) => {
   const dispatch = useDispatch();
+  const isCombo = Boolean(product?.isCombo || product?.type === 'combo');
+  const productName = product?.name || product?.nombre || product?.nombre_combo || 'Producto';
+  const productPrice = Number(product?.price ?? product?.precio ?? 0);
 
   const handleAddToCart = () => {
-    // Asegurarse de que la imagen se pase correctamente al carrito
     const imageToUse = product.imageSource || 
                       (product.image ? { uri: product.image } : require('../assets/images/producto-default.jpg'));
     
     dispatch(addToCart({
       id: product.id,
-      name: product.name,
-      price: product.price,
+      name: productName,
+      price: productPrice,
       image: imageToUse,
-      imageUrl: typeof product.image === 'string' ? product.image : null
+      imageUrl: typeof product.image === 'string' ? product.image : null,
+      isCombo,
+      comboProducts: product.products || []
     }));
   };
 
@@ -48,8 +52,14 @@ const ProductCard = ({ product }) => {
           />
         </View>
         <View style={styles.details}>
-          <Text style={styles.name} numberOfLines={1}>{product.name}</Text>
-          <Text style={styles.price}>${product.price.toFixed(2)}</Text>
+          <Text style={styles.name} numberOfLines={1}>{productName}</Text>
+          {isCombo && product.products?.length > 0 ? (
+            <Text style={styles.comboInfo} numberOfLines={2}>
+              {product.products.slice(0, 2).map((item) => item.name).join(', ')}
+              {product.products.length > 2 ? '...' : ''}
+            </Text>
+          ) : null}
+          <Text style={styles.price}>${productPrice.toFixed(2)}</Text>
         </View>
       </TouchableOpacity>
       
@@ -58,7 +68,7 @@ const ProductCard = ({ product }) => {
         onPress={handleAddToCart}
       >
         <Ionicons name="cart-outline" size={20} color={COLORS.white} />
-        <Text style={styles.addButtonText}>Agregar</Text>
+        <Text style={styles.addButtonText}>{isCombo ? 'Combo' : 'Agregar'}</Text>
       </TouchableOpacity>
     </View>
   );
@@ -97,6 +107,11 @@ const styles = StyleSheet.create({
   name: {
     ...theme.typography.subtitle,
     color: COLORS.text,
+    marginBottom: 4,
+  },
+  comboInfo: {
+    ...theme.typography.caption,
+    color: COLORS.textSecondary,
     marginBottom: 4,
   },
   price: {

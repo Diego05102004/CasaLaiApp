@@ -1,57 +1,34 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, Image, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchProductsByCategory } from '../../redux/slices/productSlice';
+import { fetchProducts } from '../../redux/slices/productSlice';
+import ProductCard from '../../components/ProductCard';
+import ComboCard from '../../components/ComboCard';
 import COLORS from '../../constants/colors';
 import theme from '../../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 
 const CatalogScreen = ({ navigation }) => {
   const dispatch = useDispatch();
-  const { products, loading, error } = useSelector((state) => state.products);
+  const { products, combos, loading, error } = useSelector((state) => state.products);
 
   useEffect(() => {
-    // Cargar productos de la categoría 11 (Impresoras)
-    dispatch(fetchProductsByCategory(11));
+    dispatch(fetchProducts());
   }, [dispatch]);
 
-  const renderProduct = ({ item }) => (
-    <TouchableOpacity 
-      style={styles.productCard}
-      onPress={() => navigation.navigate('ProductDetail', { productId: item.id })}
-    >
-      {item.imagen ? (
-        <Image 
-          source={{ uri: item.imagen }} 
-          style={styles.productImage}
-          resizeMode="contain"
-        />
-      ) : (
-        <View style={[styles.productImage, styles.productImagePlaceholder]}>
-          <Ionicons name="image-outline" size={40} color={COLORS.gray} />
-        </View>
-      )}
-      
-      <View style={styles.productInfo}>
-        <Text style={styles.productName} numberOfLines={2}>{item.nombre}</Text>
-        <Text style={styles.productDescription} numberOfLines={2}>{item.descripcion}</Text>
-        
-        <View style={styles.productDetails}>
-          <View style={styles.stockContainer}>
-            <Ionicons name="cube-outline" size={16} color={COLORS.textSecondary} />
-            <Text style={styles.stockText}>Stock: {item.stock}</Text>
-          </View>
-          <Text style={styles.productPrice}>${item.precio.toFixed(2)}</Text>
-        </View>
-      </View>
-    </TouchableOpacity>
+  const catalogItems = [...(products || []), ...(combos || [])];
+
+  const renderCatalogItem = ({ item }) => (
+    item?.isCombo || item?.type === 'combo'
+      ? <ComboCard combo={item} />
+      : <ProductCard product={item} />
   );
 
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
       <Ionicons name="print-outline" size={60} color={COLORS.gray} />
       <Text style={styles.emptyStateTitle}>No hay productos disponibles</Text>
-      <Text style={styles.emptyStateText}>No se encontraron impresoras en el catálogo</Text>
+      <Text style={styles.emptyStateText}>No se encontraron productos ni combos en el catálogo</Text>
     </View>
   );
 
@@ -62,14 +39,14 @@ const CatalogScreen = ({ navigation }) => {
       <Text style={styles.errorStateText}>{error}</Text>
       <TouchableOpacity 
         style={styles.retryButton}
-        onPress={() => dispatch(fetchProductsByCategory(11))}
+        onPress={() => dispatch(fetchProducts())}
       >
         <Text style={styles.retryButtonText}>Reintentar</Text>
       </TouchableOpacity>
     </View>
   );
 
-  if (loading && products.length === 0) {
+  if (loading && catalogItems.length === 0) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={COLORS.primary} />
@@ -81,24 +58,26 @@ const CatalogScreen = ({ navigation }) => {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Catálogo de Impresoras</Text>
-        <Text style={styles.subtitle}>{products.length} productos disponibles</Text>
+        <Text style={styles.title}>Catálogo</Text>
+        <Text style={styles.subtitle}>
+          {products.length} productos y {combos.length} combos disponibles
+        </Text>
       </View>
 
       {error ? (
         renderError()
-      ) : products.length === 0 ? (
+      ) : catalogItems.length === 0 ? (
         renderEmptyState()
       ) : (
         <FlatList
-          data={products}
-          renderItem={renderProduct}
-          keyExtractor={(item) => item.id.toString()}
+          data={catalogItems}
+          renderItem={renderCatalogItem}
+          keyExtractor={(item) => `${item.type || 'product'}-${item.id}`}
           contentContainerStyle={styles.listContent}
           numColumns={2}
           columnWrapperStyle={styles.row}
           refreshing={loading}
-          onRefresh={() => dispatch(fetchProductsByCategory(11))}
+          onRefresh={() => dispatch(fetchProducts())}
         />
       )}
     </View>

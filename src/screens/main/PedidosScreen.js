@@ -170,7 +170,7 @@ const PedidoCard = ({ pedido, onPress, onDownload }) => {
   const estado = String(pedido.estado || '').toLowerCase();
   const canDownload = isFacturaDescargable(pedido.estado);
 
-  let actionLabel = 'Ver detalle';
+  let actionLabel = 'Descargar';
   let actionStyle = styles.secondaryAction;
 
   if (estado.includes('borrador')) {
@@ -517,7 +517,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
   },
   secondaryAction: {
-    backgroundColor: '#E5E7EB',
+    backgroundColor: '#407aef',
   },
   warningAction: {
     backgroundColor: '#F5B700',
@@ -537,7 +537,7 @@ const styles = StyleSheet.create({
     padding: 10,
   },
   infoText: {
-    color: '#1D4ED8',
+    color: '#1dd862',
     fontSize: 12,
     textAlign: 'center',
   },

@@ -1,5 +1,42 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { InvocarMetodo } from '../../utils/comunicadorApi';
+
+const normalizeProduct = (product = {}) => ({
+  ...product,
+  id: Number(product.id_producto ?? product.id ?? 0),
+  name: product.nombre || product.name || 'Producto',
+  description: product.descripcion || product.description || '',
+  price: Number(product.precio ?? 0),
+  stock: Number(product.stock ?? 0),
+  image: product.imagen || product.image || null,
+  type: 'product',
+  isCombo: false,
+});
+
+const normalizeCombo = (combo = {}) => {
+  const items = Array.isArray(combo.productos) ? combo.productos : [];
+  const price = Number(combo.precio_final ?? combo.precio_total ?? combo.precio ?? 0);
+
+  return {
+    ...combo,
+    id: Number(combo.id_combo ?? combo.id ?? 0),
+    name: combo.nombre_combo || combo.name || combo.nombre || 'Combo',
+    description: combo.descripcion || combo.description || '',
+    price,
+    stock: Number(combo.stock ?? 0),
+    image: combo.imagen || combo.image || null,
+    type: 'combo',
+    isCombo: true,
+    products: items.map((item) => ({
+      ...item,
+      id: Number(item.id_producto ?? item.id ?? 0),
+      name: item.nombre_producto || item.name || item.nombre || 'Producto',
+      quantity: Number(item.cantidad ?? 1),
+      price: Number(item.precio ?? 0),
+    })),
+  };
+};
+
 export const fetchProducts = createAsyncThunk(
   'products/fetchProducts',
   async (params = {}, { rejectWithValue }) => {
@@ -8,9 +45,13 @@ export const fetchProducts = createAsyncThunk(
       console.log('[Productos] Respuesta de todos los productos:', response);
       
       if (response.status === 'success') {
+        const rawProducts = Array.isArray(response.data?.productos) ? response.data.productos : [];
+        const rawCombos = Array.isArray(response.data?.combos) ? response.data.combos : [];
+
         return {
-          products: response.data.productos,
-          total: response.data.total
+          products: rawProducts.map(normalizeProduct),
+          combos: rawCombos.map(normalizeCombo),
+          total: Number(response.data?.total ?? (rawProducts.length + rawCombos.length)),
         };
       } else {
         return rejectWithValue(response.message || 'Error al obtener productos');
@@ -82,6 +123,7 @@ export const fetchProductById = createAsyncThunk(
 
 const initialState = {
   products: [],
+  combos: [],
   currentProduct: null,
   loading: false,
   error: null,
@@ -109,6 +151,7 @@ const productSlice = createSlice({
     builder.addCase(fetchProducts.fulfilled, (state, action) => {
       state.loading = false;
       state.products = action.payload.products;
+      state.combos = action.payload.combos;
       state.total = action.payload.total;
       state.error = null;
     });
@@ -125,7 +168,8 @@ const productSlice = createSlice({
     });
     builder.addCase(fetchProductsByCategory.fulfilled, (state, action) => {
       state.loading = false;
-      state.products = action.payload.products;
+      state.products = (action.payload.products || []).map(normalizeProduct);
+      state.combos = (action.payload.combos || []).map(normalizeCombo);
       state.total = action.payload.total;
       state.categoria = action.payload.categoria;
       state.error = null;

@@ -14,6 +14,7 @@ import {
 import COLORS from '../../constants/colors';
 import theme from '../../constants/theme';
 import ProductCard from '../../components/ProductCard';
+import ComboCard from '../../components/ComboCard';
 import ScreenWithHeader from '../../components/common/ScreenWithHeader';
 import { useProducts } from '../../hooks/useProducts';
 import { useSearch } from '../../hooks/useSearch';
@@ -29,7 +30,8 @@ const sectionTitles = {
   featured: 'Ofertas Especiales',
   impresoras: 'Impresoras',
   tintas: 'Tintas',
-  cartuchos: 'Cartuchos de Tóner'
+  cartuchos: 'Cartuchos de Tóner',
+  combos: 'Combos'
 };
 
 // Componente para el slider de ofertas
@@ -156,10 +158,11 @@ const FeaturedSlider = ({ items }) => {
 const CategorySection = ({ title, items, onPressItem }) => {
   const renderItem = ({ item }) => (
     <View style={styles.productCard}>
-      <ProductCard 
-        product={item} 
-        onPress={() => onPressItem(item)}
-      />
+      {item?.isCombo || item?.type === 'combo' ? (
+        <ComboCard combo={item} />
+      ) : (
+        <ProductCard product={item} onPress={() => onPressItem(item)} />
+      )}
     </View>
   );
 

@@ -10,6 +10,53 @@ import { Ionicons } from '@expo/vector-icons';
 import MenuModal from '../../components/common/MenuModal';
 import { securePost } from '../../utils/api';
 
+const getOrderProducts = (cartItems) => {
+  const productsById = new Map();
+
+  const addProduct = (product, quantity) => {
+    const productId = Number(product?.id_producto ?? product?.id);
+    const productQuantity = Number(quantity) || 0;
+
+    if (productId <= 0 || productQuantity <= 0) {
+      return;
+    }
+
+    const existingProduct = productsById.get(productId);
+    if (existingProduct) {
+      existingProduct.quantity += productQuantity;
+      return;
+    }
+
+    productsById.set(productId, {
+      id: productId,
+      name: product?.name || product?.nombre_producto || product?.nombre || 'Producto',
+      price: Number(product?.price ?? product?.precio ?? 0),
+      quantity: productQuantity,
+    });
+  };
+
+  cartItems.forEach((item) => {
+    const itemQuantity = Number(item?.quantity) || 1;
+    const comboProducts = item?.isCombo && Array.isArray(item?.comboProducts)
+      ? item.comboProducts
+      : [];
+
+    if (comboProducts.length > 0) {
+      comboProducts.forEach((product) => {
+        const quantityInCombo = Number(product?.quantity ?? product?.cantidad) || 1;
+        addProduct(product, quantityInCombo * itemQuantity);
+      });
+      return;
+    }
+
+    if (!item?.isCombo) {
+      addProduct(item, itemQuantity);
+    }
+  });
+
+  return Array.from(productsById.values());
+};
+
 const CartScreen = () => {
   const navigation = useNavigation();
   const dispatch = useDispatch();
@@ -97,9 +144,12 @@ const CartScreen = () => {
     formData.append('estatus', 'Borrador');
     formData.append('total', String(Number(total || 0)));
 
-    items.forEach((item, index) => {
-      const productId = Number(item.id);
-      const quantity = Number(item.quantity) || 1;
+    const orderProducts = getOrderProducts(items);
+    console.log('[Cart] Productos consolidados para el pedido:', orderProducts);
+
+    orderProducts.forEach((item, index) => {
+      const productId = item.id;
+      const quantity = item.quantity;
 
       formData.append('id_producto[]', String(productId));
       formData.append(`id_producto[${index}]`, String(productId));

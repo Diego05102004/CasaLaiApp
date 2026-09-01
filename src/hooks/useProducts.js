@@ -30,6 +30,26 @@ const adaptProduct = (product) => ({
   imageSource: product.imagen ? { uri: product.imagen } : getProductImage(product.image),
 });
 
+const adaptCombo = (combo = {}) => ({
+  ...combo,
+  id: Number(combo.id_combo ?? combo.id ?? 0),
+  name: combo.nombre_combo || combo.nombre || combo.name || 'Combo',
+  description: combo.descripcion || combo.description || '',
+  price: Number(combo.precio_final ?? combo.precio_total ?? combo.precio ?? 0),
+  image: combo.imagen || combo.image || null,
+  imageSource: combo.imagen ? { uri: combo.imagen } : getProductImage(combo.image),
+  products: Array.isArray(combo.productos) ? combo.productos.map((product) => ({
+    ...product,
+    id: Number(product.id_producto ?? product.id ?? 0),
+    name: product.nombre_producto || product.nombre || product.name || 'Producto',
+    quantity: Number(product.cantidad ?? product.quantity ?? 1),
+    price: Number(product.precio ?? product.price ?? 0),
+  })) : [],
+  category: 'combos',
+  type: 'combo',
+  isCombo: true,
+});
+
 const groupProductsByCategory = (products) => products.reduce((groups, product) => {
   const category = product.category.toLowerCase();
   if (!groups[category]) {
@@ -194,17 +214,23 @@ export const useProducts = () => {
         console.log('[useProducts] Consultando productos en la API');
         const response = await InvocarMetodo('productos.php', 'default');
         const apiProducts = response?.data?.productos;
+        const apiCombos = response?.data?.combos;
 
-        if (response?.status !== 'success' || !Array.isArray(apiProducts)) {
+        if (response?.status !== 'success' || !Array.isArray(apiProducts) || !Array.isArray(apiCombos)) {
           throw new Error(response?.message || 'La API no devolvio productos validos');
         }
 
         const adaptedProducts = apiProducts.map(adaptProduct);
+        const adaptedCombos = apiCombos.map(adaptCombo);
+        const groupedProducts = groupProductsByCategory(adaptedProducts);
+        groupedProducts.combos = adaptedCombos;
         console.log('[useProducts] Productos recibidos:', {
-          total: adaptedProducts.length,
-          categorias: Object.keys(groupProductsByCategory(adaptedProducts)),
+          total: adaptedProducts.length + adaptedCombos.length,
+          productos: adaptedProducts.length,
+          combos: adaptedCombos.length,
+          categorias: Object.keys(groupedProducts),
         });
-        setProducts(groupProductsByCategory(adaptedProducts));
+        setProducts(groupedProducts);
       } catch (err) {
         const message = err?.message || 'Error al cargar los productos';
         setError(message);
