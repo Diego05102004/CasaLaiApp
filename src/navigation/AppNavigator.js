@@ -10,6 +10,7 @@ import { extendStoredSession } from '../utils/jwt';
 // Screens
 import LoginScreen from '../screens/auth/LoginScreen';
 import RegisterScreen from '../screens/auth/RegisterScreen';
+import HelpScreen from '../screens/main/HelpScreen';
 
 // Navigators - usar solo Bottom Tabs
 import BottomTabNavigator from './BottomTabNavigator';
@@ -100,7 +101,10 @@ const AppNavigator = () => {
         }}
       >
         {isAuthenticated ? (
-          <Stack.Screen name="Main" component={BottomTabNavigator} />
+          <>
+            <Stack.Screen name="Main" component={BottomTabNavigator} />
+            <Stack.Screen name="Help" component={HelpScreen} />
+          </>
         ) : (
           <>
             <Stack.Screen name="Login" component={LoginScreen} />

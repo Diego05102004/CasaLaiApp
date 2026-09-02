@@ -43,6 +43,8 @@ const MenuModal = ({ visible, onClose }) => {
       navigation.navigate('Profile');
     } else if (itemId === '3') {
       navigation.navigate('Pedidos');
+    } else if (itemId === '5') {
+      navigation.navigate('Help');
     }
     onClose();
   };
