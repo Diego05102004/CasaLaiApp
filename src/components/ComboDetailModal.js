@@ -145,7 +145,7 @@ const ComboDetailModal = ({ visible, combo, onClose, onAddToCart }) => {
               }}
             >
               <Ionicons name="cart-outline" size={20} color={COLORS.white || '#FFF'} style={{ marginRight: 8 }} />
-              <Text style={styles.addButtonText}>Agregar combo</Text>
+              <Text style={styles.addButtonText}>Agregar</Text>
             </TouchableOpacity>
           </View>
         </View>

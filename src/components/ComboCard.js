@@ -80,7 +80,7 @@ const ComboCard = ({ combo, onPress, onAddToCart }) => {
 
       <TouchableOpacity style={styles.addButton} onPress={handleAddToCart}>
         <Ionicons name="cart-outline" size={20} color={COLORS.white} />
-        <Text style={styles.addButtonText}>Agregar combo</Text>
+        <Text style={styles.addButtonText}>Agregar</Text>
       </TouchableOpacity>
     </View>
   );
@@ -92,7 +92,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
     borderRadius: 8,
     margin: 8,
-    minWidth: 150,
+    minWidth: 160,
     maxWidth: 220,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
