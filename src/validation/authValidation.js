@@ -1,11 +1,8 @@
 /**
  * Módulo de Validaciones para Inicio de Sesión y Registro (App Móvil)
- * Adaptado a partir de la lógica del sistema web.
+ * Adaptado a partir de la lógica del sistema web (login.js).
  */
 
-// ==========================================
-// 1. EXPRESIONES REGULARES (RegEx)
-// ==========================================
 export const REGEXES = {
   nombre: /^[a-zA-ZÁÉÍÓÚñÑáéíóúüÜ\s]{2,50}$/,
   apellido: /^[a-zA-ZÁÉÍÓÚÑáéíóúüÜ\s]{2,50}$/,
@@ -15,18 +12,11 @@ export const REGEXES = {
   correo: /^[A-Za-z0-9._%+\-ÁÉÍÓÚáéíóúñÑ]+@(gmail\.com|outlook\.com|yahoo\.com|icloud\.com)$/,
   direccion: /^[a-zA-ZÁÉÍÓÚñÑáéíóúüÜ0-9,-\s]{4,100}$/,
   clave: /^(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\{}\[\]|:;"'<>.,?\/\\])[A-Za-z0-9\u00f1\u00d1\u00E0-\u00FC!@#$%^&*()_+\-=\{}\[\]|:;"'<>.,?\/\\]{6,15}$/,
-  // Login permite solo username o username/email
   loginUsername: /^[a-zA-Z0-9_]{4,20}$/,
 };
 
-// ==========================================
-// 2. FILTROS Y FORMATEADORES (Equivalente a KEYPRESS)
-// ==========================================
-
-/** Normaliza espacios múltiples a uno solo */
 export const cleanSpaces = (text) => text.replace(/\s{2,}/g, ' ');
 
-/** Sanitiza input dejando solo caracteres permitidos */
 export const filterKeyPress = {
   nombre: (text) => cleanSpaces(text.replace(/[^a-zA-ZÁÉÍÓÚñÑáéíóúüÜ\s]/g, '')),
   apellido: (text) => cleanSpaces(text.replace(/[^a-zA-ZÁÉÍÓÚÑáéíóúüÜ\s]/g, '')),
@@ -35,7 +25,6 @@ export const filterKeyPress = {
   direccion: (text) => cleanSpaces(text.replace(/[^a-zA-ZÁÉÍÓÚñÑáéíóúüÜ0-9,-\s]/g, '')),
   clave: (text) => text.replace(/[^A-Za-z0-9\u00f1\u00d1\u00E0-\u00FC!@#$%^&*()_+\-=\{}\[\]|:;"'<>.,?\/\\"]/g, ''),
   
-  /** Auto-formateador de Cédula (X.XXX.XXX o XX.XXX.XXX) */
   cedula: (text) => {
     const digits = text.replace(/\D/g, '').slice(0, 8);
     if (digits.length === 7) {
@@ -46,7 +35,6 @@ export const filterKeyPress = {
     return digits;
   },
 
-  /** Auto-formateador de Teléfono (04XX-XXX-XXXX) */
   telefono: (text) => {
     const digits = text.replace(/\D/g, '').slice(0, 11);
     if (digits.length > 7) {
@@ -58,14 +46,9 @@ export const filterKeyPress = {
   },
 };
 
-// ==========================================
-// 3. VALIDACIÓN POR CAMPO (Equivalente a KEYUP)
-// ==========================================
-
 export const validateField = (field, value, extraValue = null) => {
   const val = (value || '').trim();
 
-  // Validación de campo vacío
   if (!val) {
     return '*Este campo es obligatorio*';
   }
@@ -136,7 +119,7 @@ export const validateField = (field, value, extraValue = null) => {
 
     case 'clave_confirmar':
       if (!REGEXES.clave.test(val)) {
-        return '*Ingrese la contraseña nuevamente con el formato correcto*';
+        return '*Ingrese la contraseña nuevamente*';
       }
       if (extraValue && val !== extraValue) {
         return '*Las contraseñas no coinciden*';
@@ -147,14 +130,9 @@ export const validateField = (field, value, extraValue = null) => {
       break;
   }
 
-  return ''; // Sin error
+  return '';
 };
 
-// ==========================================
-// 4. VALIDACIÓN DE FORMULARIOS COMPLETOS
-// ==========================================
-
-/** Validar Formulario de Login */
 export const validateLoginForm = (data) => {
   const errors = {};
   errors.username = validateField('usernameLogin', data.username);
@@ -164,7 +142,6 @@ export const validateLoginForm = (data) => {
   return { isValid, errors };
 };
 
-/** Validar Formulario de Registro */
 export const validateRegisterForm = (data) => {
   const errors = {};
 
@@ -176,7 +153,7 @@ export const validateRegisterForm = (data) => {
   errors.correo = validateField('correo', data.correo);
   errors.direccion = validateField('direccion', data.direccion);
   errors.clave = validateField('clave', data.clave);
-  errors.clave_confirmar = validateField('clave_confirmar', data.clave_confirmar, data.clave);
+  errors.claveConfirmar = validateField('clave_confirmar', data.claveConfirmar, data.clave);
 
   const isValid = Object.values(errors).every((err) => err === '');
   return { isValid, errors };
