@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 const defaultImage = require('../assets/images/producto-default.jpg');
 
-const ComboCard = ({ combo }) => {
+const ComboCard = ({ combo, onPress, onAddToCart }) => {
   const dispatch = useDispatch();
   const name = combo?.name || combo?.nombre_combo || combo?.nombre || 'Combo';
   const price = Number(combo?.price ?? combo?.precio_final ?? combo?.precio_total ?? combo?.precio ?? 0);
@@ -21,20 +21,32 @@ const ComboCard = ({ combo }) => {
   const imageSource = combo?.imageSource || (combo?.image ? { uri: combo.image } : getItemImage(items[0]));
 
   const handleAddToCart = () => {
-    dispatch(addToCart({
-      id: combo?.id,
-      name,
-      price,
-      image: imageSource,
-      imageUrl: typeof combo?.image === 'string' ? combo.image : null,
-      isCombo: true,
-      comboProducts: items,
-    }));
+    if (onAddToCart) {
+      onAddToCart(combo);
+    } else {
+      dispatch(addToCart({
+        id: combo?.id,
+        name,
+        price,
+        image: imageSource,
+        imageUrl: typeof combo?.image === 'string' ? combo.image : null,
+        isCombo: true,
+        comboProducts: items,
+      }));
+    }
+  };
+
+  const handlePressCard = () => {
+    if (onPress) {
+      onPress(combo);
+    } else {
+      console.log('[ComboCard] Combo seleccionado:', combo?.id);
+    }
   };
 
   return (
     <View style={styles.card}>
-      <TouchableOpacity style={styles.touchableArea} onPress={() => console.log('[ComboCard] Combo seleccionado:', combo?.id)}>
+      <TouchableOpacity style={styles.touchableArea} onPress={handlePressCard}>
         <View style={styles.imageContainer}>
           <Image source={imageSource} style={styles.image} resizeMode="cover" />
           <View style={styles.badge}>
