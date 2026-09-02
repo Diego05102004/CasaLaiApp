@@ -321,8 +321,8 @@ const CartScreen = () => {
         <View style={styles.header}>
           <Text style={styles.title}>Mi Carrito</Text>
           <TouchableOpacity onPress={handleClearCart} style={styles.clearButton}>
-            <Ionicons name="trash-outline" size={16} color={COLORS.white} style={{marginRight: 5}} />
-            <Text>Vaciar</Text>
+            <Ionicons name="trash-outline" size={21} color={COLORS.white} style={{marginRight: 5}} />
+            <Text style={{ color: COLORS.white, fontSize: 16 }}>Vaciar</Text>
           </TouchableOpacity>
         </View>
 
@@ -347,7 +347,7 @@ const CartScreen = () => {
             {isCreatingOrder ? (
               <ActivityIndicator color={COLORS.white} size="small" />
             ) : (
-              <Text style={styles.checkoutButtonText}>Generar pedido</Text>
+              <Text style={styles.checkoutButtonText}>Generar Pedido</Text>
             )}
           </TouchableOpacity>
         </View>
