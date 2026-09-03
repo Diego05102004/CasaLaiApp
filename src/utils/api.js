@@ -299,6 +299,7 @@ export const API_SCHEMAS = {
     email: { type: 'email' },
     username: { type: 'text', maxLength: 50 },
     password: { type: 'sql' },
+    recaptcha_token: { type: 'token' },
   },
   register: {
     email: { type: 'email' },

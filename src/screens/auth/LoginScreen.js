@@ -16,8 +16,7 @@ import { loginUser, clearError } from '../../redux/slices/authSlice';
 import COLORS from '../../constants/colors';
 import theme from '../../constants/theme';
 import { API_BASE_URL } from '../../config/apiConfig';
-
-// Importación de las funciones del archivo de validaciones
+import ReCaptcha from '../../components/ReCaptcha';
 import { filterKeyPress, validateField } from '../../validation/authValidation';
 
 // Intentar cargar la imagen
@@ -33,6 +32,8 @@ const LoginScreen = ({ navigation }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState(null);
+  const [captchaError, setCaptchaError] = useState('');
   const [imageError, setImageError] = useState(false);
   const [usernameError, setUsernameError] = useState('');
   const [passwordError, setPasswordError] = useState('');
@@ -94,12 +95,20 @@ const LoginScreen = ({ navigation }) => {
     }
   };
 
+  const handleCaptchaVerify = (token) => {
+    setCaptchaToken(token);
+    if (token) {
+      setCaptchaError('');
+    }
+  };
+
   const handleLogin = async () => {
     setDebugData(null);
     setApiResponse(null);
 
     let uError = '';
     let pError = '';
+    let cError = '';
 
     if (!username.trim()) {
       uError = '*Este campo es obligatorio*';
@@ -113,14 +122,24 @@ const LoginScreen = ({ navigation }) => {
       pError = validateField('passwordLogin', password);
     }
 
+    if (!captchaToken) {
+      cError = '*Por favor completa la verificación del reCAPTCHA*';
+    }
+
     setUsernameError(uError);
     setPasswordError(pError);
+    setCaptchaError(cError);
 
-    if (uError || pError) {
+    if (uError || pError || cError) {
       return;
     }
 
-    const loginData = { username: username, password, name: 'Usuario' };
+    const loginData = { 
+      username: username, 
+      password, 
+      recaptcha_token: captchaToken,
+      name: 'Usuario' 
+    };
 
     setDebugData({
       timestamp: new Date().toISOString(),
@@ -224,10 +243,16 @@ const LoginScreen = ({ navigation }) => {
             {passwordError ? <Text style={styles.fieldErrorText}>{passwordError}</Text> : null}
           </View>
 
+          {/* Widget de reCAPTCHA */}
+          <View style={styles.captchaContainer}>
+            <ReCaptcha onVerify={handleCaptchaVerify} />
+            {captchaError ? <Text style={styles.fieldErrorText}>{captchaError}</Text> : null}
+          </View>
+
           <TouchableOpacity
-            style={[styles.loginButton, loading && styles.loginButtonDisabled]}
+            style={[styles.loginButton, (loading || !username || !password || !captchaToken) && styles.loginButtonDisabled]}
             onPress={handleLogin}
-            disabled={loading || !username || !password}
+            disabled={loading || !username || !password || !captchaToken}
           >
             <Text style={styles.loginButtonText}>
               {loading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
@@ -377,17 +402,22 @@ const styles = StyleSheet.create({
     ...theme.typography.caption,
     color: COLORS.danger,
     marginTop: theme.spacing.xs,
+    textAlign: 'center',
+  },
+  captchaContainer: {
+    marginBottom: theme.spacing.md,
+    alignItems: 'center',
   },
   loginButton: {
     backgroundColor: COLORS.primary,
     padding: theme.spacing.md,
     borderRadius: theme.radius.md,
     alignItems: 'center',
-    marginTop: theme.spacing.md,
+    marginTop: theme.spacing.sm,
     ...theme.shadow.md,
   },
   loginButtonDisabled: {
-    opacity: 0.7,
+    opacity: 0.6,
   },
   loginButtonText: {
     ...theme.typography.body,
