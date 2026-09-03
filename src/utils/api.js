@@ -271,8 +271,11 @@ const handleAPIError = (error) => {
     return new APIError('El registro tardó demasiado y la solicitud fue cancelada. Intenta nuevamente.', 408);
   }
   
-  if (error.message.includes('NetworkError')) {
-    return new APIError('Error de conexión', 0);
+  if (error.message?.includes('NetworkError') || error.message?.includes('Failed to fetch')) {
+    return new APIError(
+      'No se pudo conectar con la API. Comprueba la URL, Apache/XAMPP y la configuración CORS.',
+      0
+    );
   }
   
   return new APIError(error.message || 'Error desconocido', 500);

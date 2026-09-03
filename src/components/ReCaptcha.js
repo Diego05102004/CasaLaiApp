@@ -1,12 +1,16 @@
-import React, { useEffect, useRef } from 'react';
+import React, { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import { Platform, Text, View, StyleSheet } from 'react-native';
 import { WebView } from 'react-native-webview';
 
-const RECAPTCHA_SITE_KEY = process.env.EXPO_PUBLIC_RECAPTCHA_SITE_KEY || 'TU_SITE_KEY_AQUI';
-const DOMAIN = 'http://localhost'; // Debe coincidir con el dominio registrado en la consola de Google
+const RECAPTCHA_SITE_KEY = process.env.EXPO_PUBLIC_RECAPTCHA_SITE_KEY || '';
+// El origen debe coincidir con el dominio registrado para la clave de Google.
+// La API puede usar otra URL, por ejemplo una IP LAN en un dispositivo físico.
+const DOMAIN = process.env.EXPO_PUBLIC_RECAPTCHA_DOMAIN || 'http://localhost';
 
-const ReCaptcha = ({ onVerify, onError }) => {
+const ReCaptcha = forwardRef(({ onVerify, onError }, ref) => {
   const webContainerRef = useRef(null);
+  const webViewRef = useRef(null);
+  const webWidgetIdRef = useRef(null);
   const onVerifyRef = useRef(onVerify);
   const onErrorRef = useRef(onError);
 
@@ -15,8 +19,19 @@ const ReCaptcha = ({ onVerify, onError }) => {
     onErrorRef.current = onError;
   }, [onError, onVerify]);
 
+  useImperativeHandle(ref, () => ({
+    reset: () => {
+      onVerifyRef.current(null);
+      if (Platform.OS === 'web' && window.grecaptcha && webWidgetIdRef.current !== null) {
+        window.grecaptcha.reset(webWidgetIdRef.current);
+      } else {
+        webViewRef.current?.injectJavaScript('window.grecaptcha && grecaptcha.reset(); true;');
+      }
+    },
+  }), []);
+
   useEffect(() => {
-    if (Platform.OS !== 'web' || !webContainerRef.current || RECAPTCHA_SITE_KEY === 'TU_SITE_KEY_AQUI') {
+    if (Platform.OS !== 'web' || !webContainerRef.current || !RECAPTCHA_SITE_KEY) {
       return undefined;
     }
 
@@ -24,14 +39,13 @@ const ReCaptcha = ({ onVerify, onError }) => {
     const captchaElement = document.createElement('div');
     captchaElement.style.width = '304px';
     captchaElement.style.height = '78px';
-    captchaElement.style.transform = 'scale(1.1)';
-    captchaElement.style.transformOrigin = 'center center';
     container.appendChild(captchaElement);
 
     const renderCaptcha = () => {
       if (!window.grecaptcha || !captchaElement.isConnected) return;
 
-      window.grecaptcha.render(captchaElement, {
+      // El cuadro visible corresponde a reCAPTCHA v2 Checkbox.
+      webWidgetIdRef.current = window.grecaptcha.render(captchaElement, {
         sitekey: RECAPTCHA_SITE_KEY,
         callback: (token) => onVerifyRef.current(token),
         'expired-callback': () => onVerifyRef.current(null),
@@ -61,7 +75,7 @@ const ReCaptcha = ({ onVerify, onError }) => {
   if (Platform.OS === 'web') {
     return (
       <View style={[styles.container, styles.webContainer]} ref={webContainerRef}>
-        {RECAPTCHA_SITE_KEY === 'TU_SITE_KEY_AQUI' && (
+        {!RECAPTCHA_SITE_KEY && (
           <Text style={styles.configurationText}>
             Configura EXPO_PUBLIC_RECAPTCHA_SITE_KEY para activar reCAPTCHA.
           </Text>
@@ -70,6 +84,7 @@ const ReCaptcha = ({ onVerify, onError }) => {
     );
   }
 
+  // En plataformas nativas, WebView muestra el mismo cuadro visible de reCAPTCHA v2.
   const htmlContent = `
     <!DOCTYPE html>
     <html>
@@ -85,17 +100,13 @@ const ReCaptcha = ({ onVerify, onError }) => {
             padding: 8px 0;
             background-color: transparent;
           }
-          .g-recaptcha {
-            transform: scale(1.1);
-            transform-origin: center;
-          }
         </style>
       </head>
       <body>
-        <div class="g-recaptcha" 
-             data-sitekey="${RECAPTCHA_SITE_KEY}" 
-             data-callback="onSuccess" 
-             data-expired-callback="onExpired" 
+        <div class="g-recaptcha"
+             data-sitekey="${RECAPTCHA_SITE_KEY}"
+             data-callback="onSuccess"
+             data-expired-callback="onExpired"
              data-error-callback="onError">
         </div>
 
@@ -131,6 +142,7 @@ const ReCaptcha = ({ onVerify, onError }) => {
   return (
     <View style={styles.container}>
       <WebView
+        ref={webViewRef}
         originWhitelist={['*']}
         source={{ html: htmlContent, baseUrl: DOMAIN }}
         onMessage={handleMessage}
@@ -141,7 +153,7 @@ const ReCaptcha = ({ onVerify, onError }) => {
       />
     </View>
   );
-};
+});
 
 const styles = StyleSheet.create({
   container: {

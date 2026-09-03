@@ -5,11 +5,12 @@
  * con la URL real de tu servidor.
  */
 
-// URL base de la API - CAMBIAR ESTO CUANDO SUBAS AL HOST
-// export const API_BASE_URL = 'https://casalai.infinityfree.me/api';
-
-// Para desarrollo local (XAMPP localhost)
- export const API_BASE_URL = 'http://localhost/Repositorio%20de%20GITHUB/proyecto-casalai-main/proyecto-casalai-ca/api';
+// URL base de la API. Para un dispositivo físico usa la IP LAN del PC,
+// y para el emulador Android normalmente usa 10.0.2.2 en lugar de localhost.
+export const API_BASE_URL = (
+  process.env.EXPO_PUBLIC_API_URL ||
+  'http://localhost/Repositorio%20de%20GITHUB/proyecto-casalai-main/proyecto-casalai-ca/api'
+).replace(/\/+$/, '');
 
 // Ruta real del servidor donde PHP debe guardar la imagen.
 // IMPORTANTE: esto NO es una URL para el navegador; es una ruta del sistema de archivos.

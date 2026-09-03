@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -39,6 +39,7 @@ const LoginScreen = ({ navigation }) => {
   const [passwordError, setPasswordError] = useState('');
   const [debugData, setDebugData] = useState(null);
   const [apiResponse, setApiResponse] = useState(null);
+  const recaptchaRef = useRef(null);
   const dispatch = useDispatch();
   const { loading, error, user } = useSelector((state) => state.auth);
 
@@ -149,7 +150,10 @@ const LoginScreen = ({ navigation }) => {
     });
 
     try {
-      await dispatch(loginUser(loginData));
+      const result = await dispatch(loginUser(loginData));
+      if (loginUser.rejected.match(result)) {
+        recaptchaRef.current?.reset();
+      }
     } catch (error) {
       console.error('Error en handleLogin:', error);
       setApiResponse({
@@ -245,7 +249,7 @@ const LoginScreen = ({ navigation }) => {
 
           {/* Widget de reCAPTCHA */}
           <View style={styles.captchaContainer}>
-            <ReCaptcha onVerify={handleCaptchaVerify} />
+            <ReCaptcha ref={recaptchaRef} onVerify={handleCaptchaVerify} />
             {captchaError ? <Text style={styles.fieldErrorText}>{captchaError}</Text> : null}
           </View>
 
