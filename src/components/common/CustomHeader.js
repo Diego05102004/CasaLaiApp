@@ -4,11 +4,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useSelector } from 'react-redux';
 import COLORS from '../../constants/colors';
+import { buildProfileImageUrl } from '../../config/apiConfig';
 
 const CustomHeader = ({ onSearch }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const navigation = useNavigation();
   const { user } = useSelector((state) => state.auth);
+  const profileImage = buildProfileImageUrl(user?.foto_perfil || user?.avatar || user?.photoURL);
 
   const handleSearch = () => {
     if (onSearch && searchQuery.trim()) {
@@ -40,9 +42,9 @@ const CustomHeader = ({ onSearch }) => {
         onPress={() => navigation.navigate('Profile')}
         style={styles.profileButton}
       >
-        {user?.photoURL ? (
+        {profileImage ? (
           <Image 
-            source={{ uri: user.photoURL }} 
+            source={{ uri: profileImage }} 
             style={styles.avatar} 
             resizeMode="cover"
           />

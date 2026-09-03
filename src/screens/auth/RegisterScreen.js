@@ -8,7 +8,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Alert,
+  Modal,
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
@@ -30,8 +30,12 @@ const RegisterScreen = ({ navigation }) => {
   const [direccion, setDireccion] = useState('');
   
   const [errors, setErrors] = useState({});
+  const [successVisible, setSuccessVisible] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [errorVisible, setErrorVisible] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const dispatch = useDispatch();
-  const { loading, error } = useSelector((state) => state.auth);
+  const { loading } = useSelector((state) => state.auth);
 
   const handleNombreUsuarioChange = (text) => {
     const filtered = filterKeyPress.nombre_usuario(text);
@@ -97,26 +101,33 @@ const RegisterScreen = ({ navigation }) => {
     return Object.values(newErrors).every((err) => !err);
   };
 
-  const handleRegister = () => {
-    if (validateForm()) {
-      dispatch(registerUser({
-        nombre_usuario: nombreUsuario,
-        clave: clave,
-        nombre: nombre,
-        apellido: apellido,
-        correo: correo,
-        telefono: telefono,
-        cedula: cedula,
-        direccion: direccion
-      }));
+  const handleRegister = async () => {
+    if (!validateForm()) {
+      return;
+    }
+
+    try {
+      const result = await dispatch(registerUser({
+        username: nombreUsuario,
+        password: clave,
+        nombres: nombre,
+        apellidos: apellido,
+        correo,
+        telefono,
+        cedula,
+        direccion,
+      })).unwrap();
+
+      setSuccessMessage(result?.message || 'Cliente registrado correctamente.');
+      setSuccessVisible(true);
+    } catch (registerError) {
+      const message = typeof registerError === 'string'
+        ? registerError
+        : registerError?.message || 'No se pudo completar el registro.';
+      setErrorMessage(message);
+      setErrorVisible(true);
     }
   };
-
-  React.useEffect(() => {
-    if (error) {
-      Alert.alert('Error', typeof error === 'object' ? error.message : error);
-    }
-  }, [error]);
 
   return (
     <KeyboardAvoidingView
@@ -269,6 +280,55 @@ const RegisterScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      <Modal
+        animationType="fade"
+        transparent
+        visible={successVisible}
+        onRequestClose={() => setSuccessVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.successModalCard}>
+            <View style={styles.successIconContainer}>
+              <Ionicons name="checkmark-circle" size={56} color="#22C55E" />
+            </View>
+            <Text style={styles.modalTitle}>Registro exitoso</Text>
+            <Text style={styles.modalMessage}>{successMessage}</Text>
+            <TouchableOpacity
+              style={styles.successButton}
+              onPress={() => {
+                setSuccessVisible(false);
+                navigation.navigate('Login');
+              }}
+            >
+              <Text style={styles.buttonModalText}>Aceptar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        animationType="fade"
+        transparent
+        visible={errorVisible}
+        onRequestClose={() => setErrorVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.errorModalCard}>
+            <View style={styles.errorIconContainer}>
+              <Ionicons name="alert-circle" size={56} color="#E53E3E" />
+            </View>
+            <Text style={styles.modalTitle}>Error en el registro</Text>
+            <Text style={styles.modalMessage}>{errorMessage}</Text>
+            <TouchableOpacity
+              style={styles.errorButton}
+              onPress={() => setErrorVisible(false)}
+            >
+              <Text style={styles.buttonModalText}>Cerrar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 };
@@ -370,6 +430,80 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     fontSize: 14,
     fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  successModalCard: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: COLORS.white,
+    borderRadius: 18,
+    padding: 24,
+    alignItems: 'center',
+  },
+  errorModalCard: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: COLORS.white,
+    borderRadius: 18,
+    padding: 24,
+    alignItems: 'center',
+  },
+  successIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(34, 197, 94, 0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  errorIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(229, 62, 62, 0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  modalMessage: {
+    color: '#4B5563',
+    fontSize: 15,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 20,
+  },
+  successButton: {
+    width: '100%',
+    borderRadius: 12,
+    backgroundColor: '#22C55E',
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  errorButton: {
+    width: '100%',
+    borderRadius: 12,
+    backgroundColor: '#E53E3E',
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  buttonModalText: {
+    color: COLORS.white,
+    fontWeight: '700',
+    fontSize: 15,
   },
 });
 

@@ -79,7 +79,7 @@ export const secureGet = async (endpoint, params = {}, schema = null) => {
  * @param {Object} schema - Esquema de sanitización
  * @returns {Promise} - Respuesta de la API
  */
-export const securePost = async (endpoint, data = {}, schema = null) => {
+export const securePost = async (endpoint, data = {}, schema = null, requestTimeout = API_CONFIG.timeout) => {
   try {
     // Sanitizar datos
     const sanitizedData = prepareAPIData(data, schema);
@@ -92,7 +92,7 @@ export const securePost = async (endpoint, data = {}, schema = null) => {
       baseURL: API_CONFIG.baseURL
     });
 
-    const { signal, timeoutId } = createTimeoutSignal(API_CONFIG.timeout);
+    const { signal, timeoutId } = createTimeoutSignal(requestTimeout);
     const response = await fetch(url, {
       method: 'POST',
       headers: {
@@ -268,7 +268,7 @@ const handleAPIError = (error) => {
   }
   
   if (error.name === 'AbortError' || error.name === 'TimeoutError') {
-    return new APIError('Tiempo de espera agotado', 408);
+    return new APIError('El registro tardó demasiado y la solicitud fue cancelada. Intenta nuevamente.', 408);
   }
   
   if (error.message.includes('NetworkError')) {

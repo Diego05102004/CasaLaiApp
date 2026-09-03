@@ -8,11 +8,19 @@ import { secureGet, securePost, securePut, secureDelete, API_SCHEMAS } from './a
 const OPERATIONS = {
   login: { method: 'POST', schema: API_SCHEMAS.login, useFunctionParam: false },
   registro: { method: 'POST', useFunctionParam: false },
+  registrar_cliente: { method: 'POST', useFunctionParam: false, timeout: 120000 },
   pago_ingresar: { method: 'POST', useFunctionParam: false },
   default: { method: 'GET', schema: API_SCHEMAS.getProducts, useFunctionParam: true },
   por_id: { method: 'GET', schema: API_SCHEMAS.getProducts, useFunctionParam: true },
   por_categoria: { method: 'GET', schema: API_SCHEMAS.getProducts, useFunctionParam: true },
   detallado: { method: 'GET', schema: API_SCHEMAS.getProducts, useFunctionParam: true },
+  editar_personal: { method: 'POST', useFunctionParam: false },
+  editar_correo: { method: 'POST', useFunctionParam: false },
+  cambiar_correo: { method: 'POST', useFunctionParam: false },
+  editar_email: { method: 'POST', useFunctionParam: false },
+  cambiar_email: { method: 'POST', useFunctionParam: false },
+  cambiar_password: { method: 'POST', useFunctionParam: false },
+  cambiar_avatar: { method: 'POST', useFunctionParam: false },
 };
 
 const normalizeApiFile = (apiFile) => {
@@ -65,7 +73,7 @@ class ComunicadorAPI {
 
       switch (operation.method) {
         case 'POST':
-          return securePost(endpoint, requestData, operation.schema);
+          return securePost(endpoint, requestData, operation.schema, operation.timeout);
         case 'PUT':
           return securePut(endpoint, requestData, operation.schema);
         case 'DELETE':

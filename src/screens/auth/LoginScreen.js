@@ -240,52 +240,6 @@ const LoginScreen = ({ navigation }) => {
               <Text style={styles.footerLink}>Regístrate</Text>
             </TouchableOpacity>
           </View>
-
-          {/* Sección de depuración */}
-          {(debugData || user || error) && (
-            <View style={styles.debugContainer}>
-              <Text style={styles.debugTitle}>🔍 DATOS DE DEPURACIÓN</Text>
-              
-              {debugData && (
-                <View style={styles.debugSection}>
-                  <Text style={styles.debugSectionTitle}>Petición enviada:</Text>
-                  <Text style={styles.debugText}>URL: {debugData.apiURL}</Text>
-                  <Text style={styles.debugText}>Tipo: {debugData.requestType}</Text>
-                  <Text style={styles.debugText}>Timestamp: {debugData.timestamp}</Text>
-                  <Text style={styles.debugText}>Datos: {JSON.stringify(debugData.requestData)}</Text>
-                </View>
-              )}
-
-              {apiResponse && (
-                <View style={styles.debugSection}>
-                  <Text style={styles.debugSectionTitle}>Respuesta de la API:</Text>
-                  <Text style={styles.debugText}>Status: {apiResponse.status}</Text>
-                  <Text style={styles.debugText}>Mensaje: {apiResponse.message}</Text>
-                  {apiResponse.data && (
-                    <Text style={styles.debugText}>Datos: {JSON.stringify(apiResponse.data)}</Text>
-                  )}
-                </View>
-              )}
-
-              {user && (
-                <View style={styles.debugSection}>
-                  <Text style={styles.debugSectionTitle}>Usuario autenticado:</Text>
-                  <Text style={styles.debugText}>ID: {user.id}</Text>
-                  <Text style={styles.debugText}>Nombre: {user.name}</Text>
-                  <Text style={styles.debugText}>Username: {user.username}</Text>
-                  <Text style={styles.debugText}>Email: {user.email}</Text>
-                  <Text style={styles.debugText}>Rol: {user.role}</Text>
-                </View>
-              )}
-
-              {error && (
-                <View style={styles.debugSection}>
-                  <Text style={styles.debugSectionTitle}>Error:</Text>
-                  <Text style={styles.debugError}>{typeof error === 'object' ? error.message : error}</Text>
-                </View>
-              )}
-            </View>
-          )}
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

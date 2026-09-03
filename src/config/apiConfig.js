@@ -6,10 +6,48 @@
  */
 
 // URL base de la API - CAMBIAR ESTO CUANDO SUBAS AL HOST
- // export const API_BASE_URL = 'https://casalai.infinityfree.me/api';
+// export const API_BASE_URL = 'https://casalai.infinityfree.me/api';
 
 // Para desarrollo local (XAMPP localhost)
- export const API_BASE_URL = 'http://localhost/proyecto-casalai-ca/api';
+ export const API_BASE_URL = 'http://localhost/Repositorio%20de%20GITHUB/proyecto-casalai-main/proyecto-casalai-ca/api';
+
+// Ruta real del servidor donde PHP debe guardar la imagen.
+// IMPORTANTE: esto NO es una URL para el navegador; es una ruta del sistema de archivos.
+// En XAMPP debe apuntar a la carpeta física del proyecto, no a una URL pública.
+export const PROFILE_IMAGE_STORAGE_PATH = 'C:/xampp/htdocs/Repositorio de GITHUB/proyecto-casalai-main/proyecto-casalai-ca/assets/img/uploads/';
+
+// URL pública para acceder a la imagen desde la app.
+// Esta URL sí se usa para leer la imagen desde el navegador o desde React Native.
+export const PROFILE_IMAGE_PUBLIC_URL = 'http://localhost/Repositorio%20de%20GITHUB/proyecto-casalai-main/proyecto-casalai-ca/assets/img/uploads/';
+
+// Normaliza una ruta de imagen para que funcione tanto con rutas relativas del servidor,
+// rutas absolutas del sistema de archivos, como con URLs completas ya resueltas.
+export const buildProfileImageUrl = (imageValue) => {
+  if (!imageValue) {
+    return null;
+  }
+
+  const value = String(imageValue).trim();
+
+  if (!value) {
+    return null;
+  }
+
+  if (/^https?:\/\//i.test(value) || value.startsWith('data:')) {
+    return value;
+  }
+
+    const normalized = value.replace(/\\/g, '/');
+    // PHP puede devolver una ruta absoluta, una ruta relativa o solo el nombre.
+    // Para mostrarla no reutilizamos las carpetas del servidor: solo necesitamos el archivo.
+    const fileName = normalized.split('/').pop();
+
+    if (!fileName) {
+      return null;
+    }
+
+    return `${PROFILE_IMAGE_PUBLIC_URL.replace(/\/+$/, '')}/${encodeURIComponent(fileName)}`;
+};
 
 // Configuración adicional de la API
 export const API_CONFIG = {

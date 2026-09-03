@@ -95,8 +95,33 @@ export const validateConfirmPassword = (password, confirmPassword) => {
 
 export const validateProfileImage = (asset) => {
   if (!asset) return 'Debes seleccionar una imagen';
+  if (asset.mimeType && !asset.mimeType.toLowerCase().startsWith('image/')) {
+    return 'El archivo seleccionado no es una imagen válida';
+  }
   if (asset.fileSize && asset.fileSize > 2097152) {
     return 'La imagen debe ser menor a 2MB';
   }
   return '';
+};
+
+// Conserva el formato original cuando el selector no informa explícitamente el MIME.
+export const getProfileImageMimeType = (asset) => {
+  if (asset?.mimeType?.toLowerCase().startsWith('image/')) {
+    return asset.mimeType.toLowerCase();
+  }
+
+  const extension = asset?.fileName?.split('.').pop()?.toLowerCase();
+  const mimeTypes = {
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    png: 'image/png',
+    gif: 'image/gif',
+    webp: 'image/webp',
+    bmp: 'image/bmp',
+    heic: 'image/heic',
+    heif: 'image/heif',
+    avif: 'image/avif',
+  };
+
+  return mimeTypes[extension] || 'application/octet-stream';
 };

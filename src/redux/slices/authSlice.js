@@ -321,23 +321,30 @@ export const registerUser = createAsyncThunk(
     try {
       // Sanitizar datos antes de procesar
       const sanitizedData = sanitizeForAPI(userData, {
-        nombre_usuario: { type: 'text', maxLength: 50 },
-        clave: { type: 'sql' },
-        nombre: { type: 'text', maxLength: 50 },
-        apellido: { type: 'text', maxLength: 50 },
+        username: { type: 'text', maxLength: 50 },
+        password: { type: 'sql' },
+        nombres: { type: 'text', maxLength: 50 },
+        apellidos: { type: 'text', maxLength: 50 },
         correo: { type: 'email' },
         telefono: { type: 'text', maxLength: 20 },
         cedula: { type: 'text', maxLength: 20 },
         direccion: { type: 'text', maxLength: 200 }
       });
 
-      // Hacer llamada real a la API
-      const response = await securePost('/registro.php', sanitizedData);
+      // Usar el mismo comunicador central que LoginScreen para garantizar el POST
+      // al endpoint y mantener un único flujo de manejo de respuestas y errores.
+      // Este endpoint registra en dos bases de datos y puede tardar más que un POST normal.
+      const response = await InvocarMetodo('registrarCliente.php', 'registrar_cliente', sanitizedData);
 
-      if (response.status === 'success') {
-        return { success: true, message: response.message };
+      const responseData = response?.data || response;
+
+      if (response?.status === 'success' && responseData?.status === 'success') {
+        return {
+          success: true,
+          message: responseData.message || response.message || 'Cliente registrado correctamente',
+        };
       } else {
-        return rejectWithValue(response.message || 'Error en el registro');
+        return rejectWithValue(responseData?.message || response?.message || 'Error en el registro');
       }
     } catch (error) {
       return rejectWithValue(error.message);
@@ -374,6 +381,51 @@ const authSlice = createSlice({
       state.expiresIn = (state.expiresIn || 0) + 60;
       state.expiresAt = (state.expiresAt || Math.floor(Date.now() / 1000)) + 60;
     },
+    updateUserProfile: (state, action) => {
+      if (!action.payload) {
+        return;
+      }
+
+      const payload = action.payload || {};
+      const baseUser = state.user || {};
+      const nextUser = {
+        ...baseUser,
+        ...payload,
+      };
+
+      if (payload.correo !== undefined) {
+        nextUser.correo = payload.correo;
+      }
+      if (payload.email !== undefined) {
+        nextUser.email = payload.email;
+      }
+      if (payload.correo && !payload.email) {
+        nextUser.email = payload.correo;
+      }
+      if (payload.email && !payload.correo) {
+        nextUser.correo = payload.email;
+      }
+      if (payload.nombres !== undefined) {
+        nextUser.nombres = payload.nombres;
+      }
+      if (payload.nombre !== undefined) {
+        nextUser.nombre = payload.nombre;
+      }
+      if (payload.apellidos !== undefined) {
+        nextUser.apellidos = payload.apellidos;
+      }
+      if (payload.apellido !== undefined) {
+        nextUser.apellido = payload.apellido;
+      }
+      if (payload.username !== undefined) {
+        nextUser.username = payload.username;
+      }
+      if (payload.nombre_usuario !== undefined) {
+        nextUser.nombre_usuario = payload.nombre_usuario;
+      }
+
+      state.user = nextUser;
+    },
   },
   extraReducers: (builder) => {
     // Login
@@ -405,7 +457,14 @@ const authSlice = createSlice({
     builder.addCase(checkAuth.fulfilled, (state, action) => {
       state.loading = false;
       state.isAuthenticated = action.payload.isAuthenticated;
-      state.user = action.payload.user;
+
+      const payloadUser = action.payload.user || {};
+      const currentUser = state.user || {};
+      state.user = {
+        ...payloadUser,
+        ...currentUser,
+      };
+
       state.tokenStatus = action.payload.tokenStatus || 'missing';
       state.expiresIn = action.payload.expiresIn ?? null;
       state.expiresAt = action.payload.expiresAt ?? null;
@@ -434,7 +493,14 @@ const authSlice = createSlice({
     builder.addCase(refreshAuthSession.fulfilled, (state, action) => {
       state.loading = false;
       state.isAuthenticated = action.payload.isAuthenticated;
-      state.user = action.payload.user;
+
+      const payloadUser = action.payload.user || {};
+      const currentUser = state.user || {};
+      state.user = {
+        ...payloadUser,
+        ...currentUser,
+      };
+
       state.tokenStatus = action.payload.tokenStatus || 'missing';
       state.expiresIn = action.payload.expiresIn ?? null;
       state.expiresAt = action.payload.expiresAt ?? null;
@@ -468,5 +534,5 @@ const authSlice = createSlice({
   },
 });
 
-export const { clearError, setSessionWarning, extendSessionCounter } = authSlice.actions;
+export const { clearError, setSessionWarning, extendSessionCounter, updateUserProfile } = authSlice.actions;
 export default authSlice.reducer;

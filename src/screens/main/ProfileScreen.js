@@ -1,10 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, Platform, Alert, ScrollView, TextInput, Modal } from 'react-native';
-import { useSelector } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import COLORS from '../../constants/colors';
 import theme from '../../constants/theme';
+import {
+  API_BASE_URL,
+  PROFILE_IMAGE_STORAGE_PATH,
+  buildProfileImageUrl,
+} from '../../config/apiConfig';
+import { InvocarMetodo } from '../../utils/comunicadorApi';
+import { persistAuthSession } from '../../utils/jwt';
+import { updateUserProfile } from '../../redux/slices/authSlice';
 
 import {
   filterUsername,
@@ -18,16 +26,27 @@ import {
   validatePassword,
   validateConfirmPassword,
   validateProfileImage,
+  getProfileImageMimeType,
 } from '../../validation/profileValidation';
 
 const ProfileScreen = () => {
+  const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
+  const userId = user?.id_usuario ?? user?.id ?? user?.user_id ?? null;
 
   // Estados para foto de perfil
-  const [profileImage, setProfileImage] = useState(null);
+  const [profileImage, setProfileImage] = useState(
+    buildProfileImageUrl(user?.foto_perfil || user?.avatar) || null
+  );
   const [selectedAsset, setSelectedAsset] = useState(null);
   const [tempImage, setTempImage] = useState(null);
   const [isPhotoModalVisible, setIsPhotoModalVisible] = useState(false);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
+  const [hasProfileLoaded, setHasProfileLoaded] = useState(false);
+  const [profileSuccessVisible, setProfileSuccessVisible] = useState(false);
+  const [profileSuccessMessage, setProfileSuccessMessage] = useState('');
+  const [profileErrorVisible, setProfileErrorVisible] = useState(false);
+  const [profileErrorMessage, setProfileErrorMessage] = useState('');
 
   // Estados de edición
   const [isEditingPersonal, setIsEditingPersonal] = useState(false);
@@ -60,16 +79,85 @@ const ProfileScreen = () => {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [errorsPassword, setErrorsPassword] = useState({});
+  const [currentPasswordForProfile, setCurrentPasswordForProfile] = useState('');
+  const [currentPasswordForAvatar, setCurrentPasswordForAvatar] = useState('');
+
+  useEffect(() => {
+    if (user?.foto_perfil) {
+      // La imagen puede venir guardada como ruta relativa/relativa al servidor o como URL completa.
+      // Aquí convertimos a una URL pública para que pueda cargarse correctamente en la app.
+      const resolvedImage = buildProfileImageUrl(user.foto_perfil) || user.foto_perfil;
+      setProfileImage(resolvedImage);
+    }
+  }, [user?.foto_perfil]);
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (!userId) {
+        return;
+      }
+
+      try {
+        setIsLoadingProfile(true);
+        const response = await InvocarMetodo('perfil.php', 'default', { id_usuario: userId });
+        const result = response?.data ?? response;
+        const profileData = result?.usuario || result?.user || result || {};
+
+        if (profileData && Object.keys(profileData).length > 0) {
+          const nextUser = {
+            ...(user || {}),
+            id: profileData.id_usuario ?? user?.id ?? userId,
+            id_usuario: profileData.id_usuario ?? userId,
+            username: profileData.username ?? profileData.nombre_usuario ?? user?.username ?? '',
+            nombre_usuario: profileData.username ?? profileData.nombre_usuario ?? user?.username ?? '',
+            nombres: profileData.nombres ?? profileData.nombre ?? user?.nombres ?? user?.nombre ?? '',
+            nombre: profileData.nombres ?? profileData.nombre ?? user?.nombres ?? user?.nombre ?? '',
+            apellidos: profileData.apellidos ?? profileData.apellido ?? user?.apellidos ?? user?.apellido ?? '',
+            apellido: profileData.apellidos ?? profileData.apellido ?? user?.apellidos ?? user?.apellido ?? '',
+            telefono: profileData.telefono ?? user?.telefono ?? '',
+            phone: profileData.telefono ?? user?.telefono ?? '',
+            correo: profileData.correo ?? profileData.email ?? user?.correo ?? user?.email ?? '',
+            email: profileData.correo ?? profileData.email ?? user?.correo ?? user?.email ?? '',
+            cedula: profileData.cedula ?? user?.cedula ?? '',
+            foto_perfil: profileData.foto_perfil ?? user?.foto_perfil ?? null,
+            token: user?.token ?? null,
+          };
+
+          dispatch(updateUserProfile(nextUser));
+          setHasProfileLoaded(true);
+
+          if (nextUser.foto_perfil) {
+            // Cuando el backend devuelve la ruta guardada, la convertimos a URL pública para mostrarla.
+            setProfileImage(buildProfileImageUrl(nextUser.foto_perfil) || nextUser.foto_perfil);
+          }
+          if (!isEditingPersonal) {
+            setUsername(nextUser.username || '');
+            setName(nextUser.nombres || '');
+            setLastName(nextUser.apellidos || '');
+            setPhone(nextUser.telefono || '');
+          }
+        }
+      } catch (error) {
+        console.warn('No se pudo cargar el perfil desde la API:', error?.message || error);
+      } finally {
+        setIsLoadingProfile(false);
+      }
+    };
+
+    fetchProfile();
+  }, [userId]);
 
   // Sincronización limpia con el store sin reseteos imprevistos mientras se edita
   useEffect(() => {
-    if (user && !isEditingPersonal) {
-      setUsername(getUserUsername());
-      setName(getUserNombres());
-      setLastName(getUserApellidos());
-      setPhone(getUserTelefono());
+    if (!user || isEditingPersonal || !hasProfileLoaded) {
+      return;
     }
-  }, [user, isEditingPersonal]);
+
+    setUsername(getUserUsername());
+    setName(getUserNombres());
+    setLastName(getUserApellidos());
+    setPhone(getUserTelefono());
+  }, [user, isEditingPersonal, hasProfileLoaded]);
 
   const handleOpenPhotoModal = () => {
     setTempImage(profileImage);
@@ -88,7 +176,8 @@ const ProfileScreen = () => {
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [1, 1],
-      quality: 0.8,
+      // La calidad máxima evita recomprimir el archivo antes de enviarlo al servidor.
+      quality: 1,
     });
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
@@ -103,14 +192,118 @@ const ProfileScreen = () => {
     }
   };
 
-  const handleSavePhoto = () => {
+  const handleSavePhoto = async () => {
     if (!selectedAsset && !tempImage) {
       Alert.alert('Error', 'Debes seleccionar una imagen');
       return;
     }
-    setProfileImage(tempImage);
-    setIsPhotoModalVisible(false);
-    Alert.alert('¡Éxito!', 'Foto de perfil actualizada correctamente');
+
+    if (!userId) {
+      Alert.alert('Sesión expirada', 'No se pudo identificar al usuario para actualizar la foto.');
+      return;
+    }
+
+    if (!currentPasswordForAvatar) {
+      Alert.alert('Contraseña requerida', 'Ingresa tu contraseña actual para cambiar la foto de perfil.');
+      return;
+    }
+
+    try {
+      const fileUri = selectedAsset?.uri || tempImage;
+      const originalFileName = selectedAsset?.fileName || fileUri?.split('/').pop() || 'perfil.jpg';
+      const cleanFileName = originalFileName.replace(/\\/g, '/').split('/').pop() || 'perfil.jpg';
+      const mimeType = getProfileImageMimeType(selectedAsset || { fileName: cleanFileName });
+      const extensionFromName = cleanFileName.includes('.')
+        ? cleanFileName.split('.').pop().toLowerCase()
+        : '';
+      const extensionFromMime = mimeType.split('/')[1]?.toLowerCase().replace('jpeg', 'jpg');
+      const imageExtension = extensionFromName || extensionFromMime || 'jpg';
+      const safeBaseName = cleanFileName
+        .replace(/\.[^/.]+$/, '')
+        .replace(/[^a-zA-Z0-9_-]/g, '_') || 'perfil';
+      const uploadFileName = `${Date.now()}_${safeBaseName}.${imageExtension}`;
+
+      // El objeto { uri, name, type } solo describe el archivo. Convertimos el URI a Blob
+      // para que FormData envíe los bytes reales y PHP los reciba en $_FILES.
+      const fileResponse = await fetch(fileUri);
+      if (!fileResponse.ok) {
+        throw new Error('No se pudo leer la imagen seleccionada');
+      }
+      const imageBlob = await fileResponse.blob();
+      if (!imageBlob.size) {
+        throw new Error('La imagen seleccionada está vacía');
+      }
+
+      // Este valor representa la carpeta física del servidor donde PHP debe guardar la imagen.
+      // NO es la URL pública que la app usa para mostrar la imagen.
+      const normalizedStoragePath = (PROFILE_IMAGE_STORAGE_PATH || 'assets/img/uploads/')
+        .replace(/\\/g, '/')
+        .replace(/^\/+|\/+$/g, '');
+
+      // La ruta de almacenamiento solo se envía para que el backend conozca el destino físico.
+      // FormData.name debe contener solo el nombre del archivo. La ruta física se envía
+      // por separado; mezclar ambas cosas puede corromper el multipart al procesarlo en PHP.
+
+      const formData = new FormData();
+      formData.append('funcion', 'cambiar_avatar');
+      formData.append('id_usuario', String(userId));
+      formData.append('clave_actual', currentPasswordForAvatar);
+      formData.append('ruta_foto', normalizedStoragePath);
+      formData.append('foto_perfil', imageBlob, uploadFileName);
+
+      const response = await fetch(`${API_BASE_URL}/perfil.php`, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+        },
+        body: formData,
+      });
+
+      const contentType = response.headers.get('content-type') || '';
+      const result = contentType.includes('application/json') ? await response.json() : await response.text();
+      // La API responde { status, message, data: { foto_perfil } }.
+      // Extraemos el nivel data para usar el nombre final generado por PHP.
+      const responseData = result?.data?.data || result?.data || result;
+
+      if (!response.ok || responseData?.status === 'error' || result?.status === 'error') {
+        throw new Error(
+          responseData?.message || result?.message
+            ? responseData?.message || result?.message
+            : 'No se pudo actualizar la foto de perfil.'
+        );
+      }
+
+      // El backend devuelve la ruta que se guardó en la base de datos.
+      // En la app la convertimos a una URL pública antes de mostrarla.
+      const savedImagePath =
+        responseData?.ruta_foto ||
+        responseData?.foto_perfil ||
+        responseData?.path ||
+        responseData?.avatar;
+
+      if (!savedImagePath) {
+        throw new Error('El servidor no devolvió el nombre de la imagen guardada.');
+      }
+
+      const nextUser = {
+        ...(user || {}),
+        id_usuario: userId,
+        foto_perfil: savedImagePath,
+        email: user?.correo || user?.email || '',
+        correo: user?.correo || user?.email || '',
+      };
+      dispatch(updateUserProfile(nextUser));
+      persistAuthSession({ token: user?.token, user: nextUser, payload: null });
+      setProfileImage(buildProfileImageUrl(savedImagePath) || savedImagePath);
+      setSelectedAsset(null);
+      setTempImage(null);
+      setCurrentPasswordForAvatar('');
+      setIsPhotoModalVisible(false);
+      const successText = responseData?.message || result?.message || 'Foto de perfil actualizada correctamente.';
+      showProfileSuccess(successText);
+    } catch (error) {
+      showProfileError(error?.message || 'No se pudo actualizar la foto de perfil');
+    }
   };
 
   // Manejadores de cambios
@@ -161,48 +354,135 @@ const ProfileScreen = () => {
   };
 
   // Guardar Información Personal
-  const handleSavePersonal = () => {
+  const handleSavePersonal = async () => {
     const errUsername = validateUsername(username);
     const errName = validateName(name);
     const errLastName = validateLastName(lastName);
     const errPhone = validatePhone(phone);
 
-    if (errUsername || errName || errLastName || errPhone) {
+    if (errUsername || errName || errLastName || errPhone || !currentPasswordForProfile) {
       setErrorsPersonal({
         username: errUsername,
         name: errName,
         lastName: errLastName,
         phone: errPhone,
+        clave_actual: !currentPasswordForProfile ? 'Ingresa tu contraseña actual' : '',
       });
-      Alert.alert('Error', 'Por favor corrige los campos señalados');
+      const message = 'Por favor corrige los campos señalados y confirma tu contraseña actual';
+      setProfileErrorMessage(message);
+      setProfileErrorVisible(true);
       return;
     }
 
-    setIsEditingPersonal(false);
-    Alert.alert('¡Éxito!', 'Tus datos personales han sido actualizados');
+    try {
+      const payload = {
+        funcion: 'editar_personal',
+        id_usuario: Number(userId),
+        username: username.trim(),
+        nombres: name.trim(),
+        apellidos: lastName.trim(),
+        telefono: phone.trim(),
+        clave_actual: currentPasswordForProfile,
+      };
+
+      const response = await InvocarMetodo('perfil.php', 'editar_personal', payload);
+      const result = response?.data ?? response;
+      const isSuccess = response?.status === 'success' || result?.status === 'success' || response?.success === true;
+
+      if (!isSuccess) {
+        throw new Error(response?.message || result?.message || 'No se pudo actualizar la información personal.');
+      }
+
+      const nextUser = {
+        ...(user || {}),
+        id_usuario: userId,
+        username: payload.username,
+        nombre_usuario: payload.username,
+        nombres: payload.nombres,
+        nombre: payload.nombres,
+        apellidos: payload.apellidos,
+        apellido: payload.apellidos,
+        telefono: payload.telefono,
+        phone: payload.telefono,
+        name: payload.nombres,
+        lastName: payload.apellidos,
+        correo: user?.correo || user?.email || '',
+        email: user?.correo || user?.email || '',
+      };
+
+      dispatch(updateUserProfile(nextUser));
+      persistAuthSession({ token: user?.token, user: nextUser, payload: null });
+
+      setCurrentPasswordForProfile('');
+      setIsEditingPersonal(false);
+      const successText = response?.message || result?.message || 'Tus datos personales han sido actualizados correctamente.';
+      showProfileSuccess(successText);
+    } catch (error) {
+      showProfileError(error?.message || 'No se pudo guardar tu información personal');
+    }
   };
 
   // Guardar Correo
-  const handleSaveEmail = () => {
-    const errEmail = validateEmail(newEmail);
+  const handleSaveEmail = async () => {
+    const trimmedEmail = newEmail.trim();
+    const errEmail = validateEmail(trimmedEmail);
     if (errEmail || !currentPasswordForEmail) {
       setErrorsEmail({
         newEmail: errEmail,
         currentPasswordForEmail: !currentPasswordForEmail ? 'Ingresa tu contraseña actual' : '',
       });
-      Alert.alert('Error', 'Por favor completa y corrige los campos del correo');
+      const message = 'Por favor completa y corrige los campos del correo';
+      setProfileErrorMessage(message);
+      setProfileErrorVisible(true);
       return;
     }
 
-    setIsEditingEmail(false);
-    setNewEmail('');
-    setCurrentPasswordForEmail('');
-    setErrorsEmail({});
-    Alert.alert('¡Éxito!', 'Tu correo electrónico ha sido actualizado');
+    try {
+      const payload = {
+        funcion: 'cambiar_correo',
+        id_usuario: Number(userId),
+        clave_actual: currentPasswordForEmail,
+        correo_actual: user?.correo || user?.email || '',
+        correo: trimmedEmail,
+        email: trimmedEmail,
+        nuevo_correo: trimmedEmail,
+        correo_nuevo: trimmedEmail,
+        email_nuevo: trimmedEmail,
+      };
+
+      const response = await InvocarMetodo('perfil.php', 'cambiar_correo', payload);
+      const result = response?.data ?? response;
+      const isSuccess = response?.status === 'success' || result?.status === 'success' || response?.success === true;
+
+      if (!isSuccess) {
+        throw new Error(response?.message || result?.message || 'No se pudo actualizar el correo.');
+      }
+
+      const nextUser = {
+        ...(user || {}),
+        id_usuario: userId,
+        correo: trimmedEmail,
+        email: trimmedEmail,
+        nombre_usuario: user?.nombre_usuario || user?.username || '',
+        username: user?.nombre_usuario || user?.username || '',
+      };
+
+      dispatch(updateUserProfile(nextUser));
+      await persistAuthSession({ token: user?.token, user: nextUser, payload: null });
+
+      setIsEditingEmail(false);
+      setNewEmail('');
+      setCurrentPasswordForEmail('');
+      setErrorsEmail({});
+      const successText = response?.message || result?.message || 'Tu correo electrónico ha sido actualizado correctamente.';
+      showProfileSuccess(successText);
+    } catch (error) {
+      showProfileError(error?.message || 'No se pudo actualizar tu correo electrónico');
+    }
   };
 
   // Guardar Contraseña
-  const handleSavePassword = () => {
+  const handleSavePassword = async () => {
     const errNewPassword = validatePassword(newPassword);
     const errConfirmPassword = validateConfirmPassword(newPassword, confirmPassword);
 
@@ -212,16 +492,52 @@ const ProfileScreen = () => {
         newPassword: errNewPassword,
         confirmPassword: errConfirmPassword,
       });
-      Alert.alert('Error', 'Por favor revisa los campos de contraseña');
+      const message = 'Por favor revisa los campos de contraseña';
+      setProfileErrorMessage(message);
+      setProfileErrorVisible(true);
       return;
     }
 
-    setIsEditingPassword(false);
-    setCurrentPassword('');
-    setNewPassword('');
-    setConfirmPassword('');
-    setErrorsPassword({});
-    Alert.alert('¡Éxito!', 'Tu contraseña ha sido actualizada');
+    try {
+      const payload = {
+        funcion: 'cambiar_password',
+        id_usuario: Number(userId),
+        clave_actual: currentPassword,
+        clave_nueva: newPassword,
+        clave_confirmar: confirmPassword,
+      };
+
+      const response = await InvocarMetodo('perfil.php', 'cambiar_password', payload);
+      const result = response?.data ?? response;
+      const isSuccess = response?.status === 'success' || result?.status === 'success' || response?.success === true;
+
+      if (!isSuccess) {
+        throw new Error(response?.message || result?.message || 'No se pudo actualizar la contraseña.');
+      }
+
+      setIsEditingPassword(false);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setErrorsPassword({});
+      const successText = response?.message || result?.message || 'Tu contraseña ha sido actualizada correctamente.';
+      showProfileSuccess(successText);
+    } catch (error) {
+      showProfileError(error?.message || 'No se pudo cambiar la contraseña');
+    }
+  };
+
+  const showProfileSuccess = (message) => {
+    const fallbackMessage = 'La operación se realizó correctamente.';
+    const finalMessage = message || fallbackMessage;
+    setProfileSuccessMessage(finalMessage === 'Operación exitosa' ? fallbackMessage : finalMessage);
+    setProfileSuccessVisible(true);
+  };
+
+  const showProfileError = (message) => {
+    const fallbackMessage = 'No se pudo completar la operación.';
+    setProfileErrorMessage(message || fallbackMessage);
+    setProfileErrorVisible(true);
   };
 
   const renderUserField = (label, value) => (
@@ -285,6 +601,21 @@ const ProfileScreen = () => {
               </View>
 
               <View style={styles.inputBlock}>
+                <Text style={styles.infoLabel}>Contraseña Actual</Text>
+                <TextInput
+                  style={[styles.input, errorsPersonal.clave_actual && styles.inputError]}
+                  value={currentPasswordForProfile}
+                  onChangeText={(text) => {
+                    setCurrentPasswordForProfile(text);
+                    setErrorsPersonal((prev) => ({ ...prev, clave_actual: '' }));
+                  }}
+                  secureTextEntry
+                  placeholder="Confirma tu contraseña actual"
+                />
+                {errorsPersonal.clave_actual ? <Text style={styles.errorText}>{errorsPersonal.clave_actual}</Text> : null}
+              </View>
+
+              <View style={styles.inputBlock}>
                 <Text style={styles.infoLabel}>Nombres</Text>
                 <TextInput
                   style={[styles.input, errorsPersonal.name && styles.inputError]}
@@ -330,6 +661,7 @@ const ProfileScreen = () => {
                     setName(getUserNombres());
                     setLastName(getUserApellidos());
                     setPhone(getUserTelefono());
+                    setCurrentPasswordForProfile('');
                     setErrorsPersonal({});
                     setIsEditingPersonal(false);
                   }}
@@ -517,6 +849,54 @@ const ProfileScreen = () => {
         </View>
       </ScrollView>
 
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={profileSuccessVisible}
+        onRequestClose={() => setProfileSuccessVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.successModalCard}>
+            <View style={styles.successIconContainer}>
+              <Ionicons name="checkmark-circle" size={56} color={COLORS.success || '#22c55e'} />
+            </View>
+            <Text style={styles.successTitle}>Operación exitosa</Text>
+            <Text style={styles.successText}>{profileSuccessMessage}</Text>
+
+            <TouchableOpacity
+              style={styles.successPrimaryButton}
+              onPress={() => setProfileSuccessVisible(false)}
+            >
+              <Text style={styles.successPrimaryText}>Aceptar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={profileErrorVisible}
+        onRequestClose={() => setProfileErrorVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.errorModalCard}>
+            <View style={styles.errorIconContainer}>
+              <Ionicons name="alert-circle" size={56} color="#E53E3E" />
+            </View>
+            <Text style={styles.errorTitle}>Error</Text>
+            <Text style={styles.errorTextModal}>{profileErrorMessage}</Text>
+
+            <TouchableOpacity
+              style={styles.errorPrimaryButton}
+              onPress={() => setProfileErrorVisible(false)}
+            >
+              <Text style={styles.errorPrimaryText}>Cerrar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* MODAL CAMBIAR FOTO DE PERFIL */}
       <Modal
         visible={isPhotoModalVisible}
@@ -544,6 +924,17 @@ const ProfileScreen = () => {
                     </Text>
                   </View>
                 )}
+              </View>
+
+              <View style={styles.inputBlock}>
+                <Text style={styles.infoLabel}>Contraseña Actual</Text>
+                <TextInput
+                  style={[styles.input, !currentPasswordForAvatar && styles.inputError]}
+                  value={currentPasswordForAvatar}
+                  onChangeText={(text) => setCurrentPasswordForAvatar(text)}
+                  secureTextEntry
+                  placeholder="Ingresa tu contraseña para confirmar"
+                />
               </View>
 
               <TouchableOpacity style={styles.selectImageButton} onPress={pickImage}>
@@ -841,6 +1232,92 @@ const styles = StyleSheet.create({
     paddingTop: theme.spacing.md,
     borderTopWidth: 1,
     borderTopColor: COLORS.borderLight,
+  },
+  successModalCard: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 24,
+    alignItems: 'center',
+    ...theme.shadow.lg,
+  },
+  successIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(34, 197, 94, 0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  successTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 8,
+  },
+  successText: {
+    color: '#4B5563',
+    fontSize: 15,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 20,
+  },
+  successPrimaryButton: {
+    width: '100%',
+    borderRadius: 12,
+    backgroundColor: '#22C55E',
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  successPrimaryText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  errorModalCard: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 24,
+    alignItems: 'center',
+    ...theme.shadow.lg,
+  },
+  errorIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(229, 62, 62, 0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  errorTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 8,
+  },
+  errorTextModal: {
+    color: '#4B5563',
+    fontSize: 15,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 20,
+  },
+  errorPrimaryButton: {
+    width: '100%',
+    borderRadius: 12,
+    backgroundColor: '#E53E3E',
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  errorPrimaryText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 15,
   },
 });
 
