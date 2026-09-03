@@ -102,9 +102,9 @@ const ProductDetailModal = ({
                 <Text style={styles.title}>{product.nombre || product.name || 'Producto'}</Text>
 
                 <Text style={styles.metaText}>
-                  Marca: <Text style={styles.metaValue}>{product.marca || 'N/A'}</Text>
+                  Marca: <Text style={styles.metaValue}>{product.brand || product.marca || product.nombre_marca || 'N/A'}</Text>
                   {'  •  '}
-                  Modelo: <Text style={styles.metaValue}>{product.modelo || 'N/A'}</Text>
+                  Modelo: <Text style={styles.metaValue}>{product.model || product.modelo || product.nombre_modelo || 'N/A'}</Text>
                 </Text>
 
                 <Text style={styles.metaText}>
@@ -114,7 +114,7 @@ const ProductDetailModal = ({
                 <View style={styles.categoryRow}>
                   <Text style={styles.metaText}>Categoría: </Text>
                   <View style={styles.categoryBadge}>
-                    <Text style={styles.categoryText}>{product.categoria || product.category || 'Otros'}</Text>
+                    <Text style={styles.categoryText}>{product.category || product.categoria || product.categoria_nombre || 'Otros'}</Text>
                   </View>
                 </View>
 
@@ -172,8 +172,8 @@ const ProductDetailModal = ({
 
             <View style={styles.sectionDivider} />
             <Text style={styles.sectionTitle}>CARACTERÍSTICAS</Text>
-            {product.caracteristicas ? (
-              <Text style={styles.featuresText}>{product.caracteristicas}</Text>
+            {product.features || product.caracteristicas || product.caracteristica ? (
+              <Text style={styles.featuresText}>{product.features || product.caracteristicas || product.caracteristica}</Text>
             ) : (
               <Text style={styles.emptySectionText}>
                 Este producto no tiene características registradas para su categoría.

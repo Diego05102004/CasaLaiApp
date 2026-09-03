@@ -228,6 +228,17 @@ const HomeScreen = ({ navigation }) => {
     .filter(item => item && !item.isCombo && item.type !== 'combo');
 
   const selectedProdId = selectedProduct?.id || selectedProduct?.id_producto;
+  const selectedCategory = selectedProduct?.category
+    || selectedProduct?.categoria_nombre
+    || selectedProduct?.categoria;
+  const relatedProducts = allProductsList.filter((product) => {
+    const productCategory = product?.category
+      || product?.categoria_nombre
+      || product?.categoria;
+
+    return productCategory === selectedCategory
+      && (product.id || product.id_producto) !== selectedProdId;
+  });
 
   if (loading) {
     return (
@@ -309,7 +320,7 @@ const HomeScreen = ({ navigation }) => {
       <ProductDetailModal
         visible={!!selectedProduct}
         product={selectedProduct}
-        relatedProducts={allProductsList.filter(p => (p.id || p.id_producto) !== selectedProdId)}
+        relatedProducts={relatedProducts}
         onClose={() => setSelectedProduct(null)}
         onAddToCart={(product, quantity) => addItem(product, quantity || 1)}
         onSelectProduct={(product) => setSelectedProduct(product)}
