@@ -16,6 +16,7 @@ import theme from '../../constants/theme';
 import ProductCard from '../../components/ProductCard';
 import ComboCard from '../../components/ComboCard';
 import ComboDetailModal from '../../components/ComboDetailModal';
+import ProductDetailModal from '../../components/ProductDetailModal';
 import ScreenWithHeader from '../../components/common/ScreenWithHeader';
 import { useProducts } from '../../hooks/useProducts';
 import { useSearch } from '../../hooks/useSearch';
@@ -26,7 +27,6 @@ import { Ionicons } from '@expo/vector-icons';
 
 const { width } = Dimensions.get('window');
 
-// Títulos para las secciones
 const sectionTitles = {
   featured: 'Ofertas Especiales',
   impresoras: 'Impresoras',
@@ -35,12 +35,10 @@ const sectionTitles = {
   combos: 'Combos'
 };
 
-// Componente para el slider de ofertas
-const FeaturedSlider = ({ items }) => {
+const FeaturedSlider = ({ items, onPressItem }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const flatListRef = useRef(null);
 
-  // Efecto para el auto-desplazamiento
   useEffect(() => {
     if (items.length <= 1) return;
     
@@ -56,7 +54,6 @@ const FeaturedSlider = ({ items }) => {
     return () => clearInterval(interval);
   }, [currentIndex, items.length]);
 
-  // Manejar el scroll manual
   const handleScroll = (event) => {
     const newIndex = Math.round(event.nativeEvent.contentOffset.x / (width - 40));
     if (newIndex !== currentIndex) {
@@ -73,15 +70,23 @@ const FeaturedSlider = ({ items }) => {
   const renderItem = ({ item }) => {
     const imageSource = item.imageSource || 
                        (item.image ? { uri: item.image } : require('../../assets/images/producto-default.jpg'));
-    
+    const itemPrice = Number(item.price ?? item.precio ?? 0);
+    const origPrice = Number(item.originalPrice ?? itemPrice);
+
     return (
-      <View style={styles.slide}>
+      <TouchableOpacity 
+        style={styles.slide}
+        activeOpacity={0.9}
+        onPress={() => onPressItem && onPressItem(item)}
+      >
         <View style={styles.featuredCard}>
-          <View style={styles.discountBadge}>
-            <Text style={styles.discountText}>
-              {Math.round(((item.originalPrice - item.price) / item.originalPrice) * 100)}% OFF
-            </Text>
-          </View>
+          {origPrice > itemPrice && (
+            <View style={styles.discountBadge}>
+              <Text style={styles.discountText}>
+                {Math.round(((origPrice - itemPrice) / origPrice) * 100)}% OFF
+              </Text>
+            </View>
+          )}
           <Image 
             source={imageSource}
             style={styles.featuredImage}
@@ -89,14 +94,16 @@ const FeaturedSlider = ({ items }) => {
             defaultSource={require('../../assets/images/producto-default.jpg')}
           />
           <View style={styles.featuredInfo}>
-            <Text style={styles.featuredName} numberOfLines={1}>{item.name}</Text>
+            <Text style={styles.featuredName} numberOfLines={1}>{item.name || item.nombre}</Text>
             <View style={styles.priceContainer}>
-              <Text style={styles.originalPrice}>${item.originalPrice?.toFixed(2) || item.price.toFixed(2)}</Text>
-              <Text style={styles.discountedPrice}>${item.price.toFixed(2)}</Text>
+              {origPrice > itemPrice && (
+                <Text style={styles.originalPrice}>${origPrice.toFixed(2)}</Text>
+              )}
+              <Text style={styles.discountedPrice}>${itemPrice.toFixed(2)}</Text>
             </View>
           </View>
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -108,7 +115,7 @@ const FeaturedSlider = ({ items }) => {
         ref={flatListRef}
         data={items}
         renderItem={renderItem}
-        keyExtractor={item => item.id}
+        keyExtractor={(item, index) => (item.id || item.id_producto || index).toString()}
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
@@ -146,7 +153,6 @@ const FeaturedSlider = ({ items }) => {
   );
 };
 
-// Componente para la sección de categorías
 const CategorySection = ({ title, items, onPressItem, onPressCombo, onAddComboToCart }) => {
   const renderItem = ({ item }) => (
     <View style={styles.productCard}>
@@ -157,14 +163,12 @@ const CategorySection = ({ title, items, onPressItem, onPressCombo, onAddComboTo
           onAddToCart={() => onAddComboToCart(item)}
         />
       ) : (
-        <ProductCard product={item} onPress={() => onPressItem(item)} />
+        <ProductCard product={item} onPress={onPressItem} />
       )}
     </View>
   );
 
-  if (!items || items.length === 0) {
-    return null;
-  }
+  if (!items || items.length === 0) return null;
 
   return (
     <View style={styles.categorySection}>
@@ -172,7 +176,7 @@ const CategorySection = ({ title, items, onPressItem, onPressCombo, onAddComboTo
       <FlatList
         data={items}
         renderItem={renderItem}
-        keyExtractor={item => item.id}
+        keyExtractor={(item, index) => (item?.id || item?.id_producto || index).toString()}
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.categoryList}
@@ -191,10 +195,10 @@ const HomeScreen = ({ navigation }) => {
   const { searchQuery, setSearchQuery, searchResults, filterData } = useSearch();
   const { addItem } = useCart();
 
-  // Estados para modales
   const [menuVisible, setMenuVisible] = useState(false);
   const [selectedCombo, setSelectedCombo] = useState(null);
   const [comboModalVisible, setComboModalVisible] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState(null);
 
   const filteredSections = searchQuery ? searchResults : products;
   
@@ -206,13 +210,24 @@ const HomeScreen = ({ navigation }) => {
   };
 
   const handleProductPress = (product) => {
-    addItem(product, 1);
+    if (product?.isCombo || product?.type === 'combo') {
+      setSelectedCombo(product);
+      setComboModalVisible(true);
+    } else {
+      setSelectedProduct(product);
+    }
   };
 
   const handleComboPress = (combo) => {
     setSelectedCombo(combo);
     setComboModalVisible(true);
   };
+
+  const allProductsList = Object.values(filteredSections || {})
+    .flat()
+    .filter(item => item && !item.isCombo && item.type !== 'combo');
+
+  const selectedProdId = selectedProduct?.id || selectedProduct?.id_producto;
 
   if (loading) {
     return (
@@ -243,15 +258,16 @@ const HomeScreen = ({ navigation }) => {
           </View>
           <ScrollView style={styles.container}>
             <View style={styles.contentContainer}>
-              {/* Sección de ofertas destacadas */}
               {filteredSections.featured && filteredSections.featured.length > 0 && (
                 <View style={styles.section}>
                   <Text style={styles.sectionHeader}>Ofertas Especiales</Text>
-                  <FeaturedSlider items={filteredSections.featured} />
+                  <FeaturedSlider 
+                    items={filteredSections.featured} 
+                    onPressItem={handleProductPress}
+                  />
                 </View>
               )}
 
-              {/* Secciones por categoría */}
               {Object.keys(filteredSections).map(category => {
                 if (category === 'featured') return null;
 
@@ -271,7 +287,6 @@ const HomeScreen = ({ navigation }) => {
         </ImageBackground>
       </ScreenWithHeader>
 
-      {/* Botón flotante de menú */}
       <TouchableOpacity
         style={styles.menuButton}
         onPress={() => setMenuVisible(true)}
@@ -279,18 +294,25 @@ const HomeScreen = ({ navigation }) => {
         <Ionicons name="menu" size={24} color={COLORS.white} />
       </TouchableOpacity>
 
-      {/* Modal del menú */}
       <MenuModal
         visible={menuVisible}
         onClose={() => setMenuVisible(false)}
       />
 
-      {/* Modal de Detalle de Combo */}
       <ComboDetailModal
         visible={comboModalVisible}
         combo={selectedCombo}
         onClose={() => setComboModalVisible(false)}
         onAddToCart={(combo) => addItem(combo, 1)}
+      />
+
+      <ProductDetailModal
+        visible={!!selectedProduct}
+        product={selectedProduct}
+        relatedProducts={allProductsList.filter(p => (p.id || p.id_producto) !== selectedProdId)}
+        onClose={() => setSelectedProduct(null)}
+        onAddToCart={(product, quantity) => addItem(product, quantity || 1)}
+        onSelectProduct={(product) => setSelectedProduct(product)}
       />
     </>
   );
