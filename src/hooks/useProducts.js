@@ -21,12 +21,16 @@ const getProductImage = (imageName) => {
 
 const adaptProduct = (product) => ({
   ...product,
-  id: product.id,
-  name: product.nombre,
-  description: product.descripcion || '',
-  price: Number(product.precio) || 0,
-  category: product.categoria_nombre || String(product.categoria_id || 'otros'),
-  image: product.imagen || null,
+  id: Number(product.id_producto ?? product.id ?? 0),
+  name: product.nombre || product.name || 'Producto',
+  description: product.descripcion || product.description || '',
+  brand: product.marca || product.nombre_marca || product.marca_nombre || product.brand || '',
+  model: product.modelo || product.nombre_modelo || product.modelo_nombre || product.model || '',
+  features: product.caracteristicas || product.caracteristica || product.features || '',
+  price: Number(product.precio ?? product.price) || 0,
+  stock: Number(product.stock ?? product.existencia) || 0,
+  category: product.categoria_nombre || product.categoria || product.category || String(product.categoria_id || 'otros'),
+  image: product.imagen || product.image || null,
   imageSource: product.imagen ? { uri: product.imagen } : getProductImage(product.image),
 });
 

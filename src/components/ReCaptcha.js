@@ -1,0 +1,170 @@
+import React, { useEffect, useRef } from 'react';
+import { Platform, Text, View, StyleSheet } from 'react-native';
+import { WebView } from 'react-native-webview';
+
+const RECAPTCHA_SITE_KEY = process.env.EXPO_PUBLIC_RECAPTCHA_SITE_KEY || 'TU_SITE_KEY_AQUI';
+const DOMAIN = 'http://localhost'; // Debe coincidir con el dominio registrado en la consola de Google
+
+const ReCaptcha = ({ onVerify, onError }) => {
+  const webContainerRef = useRef(null);
+  const onVerifyRef = useRef(onVerify);
+  const onErrorRef = useRef(onError);
+
+  useEffect(() => {
+    onVerifyRef.current = onVerify;
+    onErrorRef.current = onError;
+  }, [onError, onVerify]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !webContainerRef.current || RECAPTCHA_SITE_KEY === 'TU_SITE_KEY_AQUI') {
+      return undefined;
+    }
+
+    const container = webContainerRef.current;
+    const captchaElement = document.createElement('div');
+    captchaElement.style.width = '304px';
+    captchaElement.style.height = '78px';
+    captchaElement.style.transform = 'scale(1.1)';
+    captchaElement.style.transformOrigin = 'center center';
+    container.appendChild(captchaElement);
+
+    const renderCaptcha = () => {
+      if (!window.grecaptcha || !captchaElement.isConnected) return;
+
+      window.grecaptcha.render(captchaElement, {
+        sitekey: RECAPTCHA_SITE_KEY,
+        callback: (token) => onVerifyRef.current(token),
+        'expired-callback': () => onVerifyRef.current(null),
+        'error-callback': () => {
+          onVerifyRef.current(null);
+          onErrorRef.current?.();
+        },
+      });
+    };
+
+    if (window.grecaptcha) {
+      window.grecaptcha.ready(renderCaptcha);
+    } else {
+      const script = document.createElement('script');
+      script.src = 'https://www.google.com/recaptcha/api.js?render=explicit';
+      script.async = true;
+      script.defer = true;
+      script.onload = () => window.grecaptcha?.ready(renderCaptcha);
+      document.head.appendChild(script);
+    }
+
+    return () => {
+      captchaElement.remove();
+    };
+  }, []);
+
+  if (Platform.OS === 'web') {
+    return (
+      <View style={[styles.container, styles.webContainer]} ref={webContainerRef}>
+        {RECAPTCHA_SITE_KEY === 'TU_SITE_KEY_AQUI' && (
+          <Text style={styles.configurationText}>
+            Configura EXPO_PUBLIC_RECAPTCHA_SITE_KEY para activar reCAPTCHA.
+          </Text>
+        )}
+      </View>
+    );
+  }
+
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <script src="https://www.google.com/recaptcha/api.js" async defer></script>
+        <style>
+          body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 0;
+            padding: 8px 0;
+            background-color: transparent;
+          }
+          .g-recaptcha {
+            transform: scale(1.1);
+            transform-origin: center;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="g-recaptcha" 
+             data-sitekey="${RECAPTCHA_SITE_KEY}" 
+             data-callback="onSuccess" 
+             data-expired-callback="onExpired" 
+             data-error-callback="onError">
+        </div>
+
+        <script>
+          function onSuccess(token) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'SUCCESS', token }));
+          }
+          function onExpired() {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'EXPIRED' }));
+          }
+          function onError() {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'ERROR' }));
+          }
+        </script>
+      </body>
+    </html>
+  `;
+
+  const handleMessage = (event) => {
+    try {
+      const data = JSON.parse(event.nativeEvent.data);
+      if (data.type === 'SUCCESS') {
+        onVerify(data.token);
+      } else if (data.type === 'EXPIRED' || data.type === 'ERROR') {
+        onVerify(null);
+        if (onError) onError();
+      }
+    } catch (err) {
+      console.error('Error procesando respuesta del captcha:', err);
+    }
+  };
+
+  return (
+    <View style={styles.container}>
+      <WebView
+        originWhitelist={['*']}
+        source={{ html: htmlContent, baseUrl: DOMAIN }}
+        onMessage={handleMessage}
+        style={styles.webview}
+        scrollEnabled={false}
+        javaScriptEnabled={true}
+        domStorageEnabled={true}
+      />
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    minHeight: 105,
+    width: '100%',
+    marginVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  configurationText: {
+    color: '#b91c1c',
+    fontSize: 12,
+    textAlign: 'center',
+  },
+  webContainer: {
+    width: 334,
+    alignSelf: 'center',
+  },
+  webview: {
+    width: 340,
+    height: 105,
+    backgroundColor: 'transparent',
+  },
+});
+
+export default ReCaptcha;

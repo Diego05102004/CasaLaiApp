@@ -21,7 +21,9 @@ import { filterKeyPress, validateField } from '../../validation/authValidation';
 const RegisterScreen = ({ navigation }) => {
   const [nombreUsuario, setNombreUsuario] = useState('');
   const [clave, setClave] = useState('');
+  const [claveConfirmar, setClaveConfirmar] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [nombre, setNombre] = useState('');
   const [apellido, setApellido] = useState('');
   const [correo, setCorreo] = useState('');
@@ -46,7 +48,17 @@ const RegisterScreen = ({ navigation }) => {
   const handleClaveChange = (text) => {
     const filtered = filterKeyPress.clave(text);
     setClave(filtered);
-    setErrors((prev) => ({ ...prev, clave: validateField('clave', filtered) }));
+    setErrors((prev) => ({
+      ...prev,
+      clave: validateField('clave', filtered),
+      ...(claveConfirmar ? { claveConfirmar: validateField('clave_confirmar', claveConfirmar, filtered) } : {})
+    }));
+  };
+
+  const handleClaveConfirmarChange = (text) => {
+    const filtered = filterKeyPress.clave(text);
+    setClaveConfirmar(filtered);
+    setErrors((prev) => ({ ...prev, claveConfirmar: validateField('clave_confirmar', filtered, clave) }));
   };
 
   const handleNombreChange = (text) => {
@@ -87,14 +99,15 @@ const RegisterScreen = ({ navigation }) => {
 
   const validateForm = () => {
     const newErrors = {
-      nombreUsuario: validateField('nombre_usuario', nombreUsuario),
-      clave: validateField('clave', clave),
       nombre: validateField('nombre', nombre),
       apellido: validateField('apellido', apellido),
-      correo: validateField('correo', correo),
-      telefono: validateField('telefono', telefono),
+      nombreUsuario: validateField('nombre_usuario', nombreUsuario),
       cedula: validateField('cedula', cedula),
+      telefono: validateField('telefono', telefono),
+      correo: validateField('correo', correo),
       direccion: validateField('direccion', direccion),
+      clave: validateField('clave', clave),
+      claveConfirmar: validateField('clave_confirmar', claveConfirmar, clave),
     };
 
     setErrors(newErrors);
@@ -132,7 +145,7 @@ const RegisterScreen = ({ navigation }) => {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView
         contentContainerStyle={styles.scrollContainer}
@@ -338,11 +351,22 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
   },
+  webContainer: {
+    flex: 1,
+    height: '100vh',
+    maxHeight: '100vh',
+    overflow: 'hidden',
+    backgroundColor: COLORS.background,
+  },
+  scrollView: {
+    flex: 1,
+    width: '100%',
+  },
   scrollContainer: {
     flexGrow: 1,
     paddingHorizontal: 20,
     paddingTop: 30,
-    paddingBottom: 40,
+    paddingBottom: 60,
   },
   header: {
     alignItems: 'center',
@@ -395,7 +419,7 @@ const styles = StyleSheet.create({
   },
   eyeButton: {
     paddingHorizontal: 12,
-    justifyContent: 'center',
+    justifycontent: 'center',
     alignItems: 'center',
   },
   inputError: {

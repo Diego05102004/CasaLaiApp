@@ -15,6 +15,8 @@ import COLORS from '../../constants/colors';
 import theme from '../../constants/theme';
 import ProductCard from '../../components/ProductCard';
 import ComboCard from '../../components/ComboCard';
+import ComboDetailModal from '../../components/ComboDetailModal';
+import ProductDetailModal from '../../components/ProductDetailModal';
 import ScreenWithHeader from '../../components/common/ScreenWithHeader';
 import { useProducts } from '../../hooks/useProducts';
 import { useSearch } from '../../hooks/useSearch';
@@ -25,7 +27,6 @@ import { Ionicons } from '@expo/vector-icons';
 
 const { width } = Dimensions.get('window');
 
-// Títulos para las secciones
 const sectionTitles = {
   featured: 'Ofertas Especiales',
   impresoras: 'Impresoras',
@@ -34,12 +35,10 @@ const sectionTitles = {
   combos: 'Combos'
 };
 
-// Componente para el slider de ofertas
-const FeaturedSlider = ({ items }) => {
+const FeaturedSlider = ({ items, onPressItem }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const flatListRef = useRef(null);
 
-  // Efecto para el auto-desplazamiento
   useEffect(() => {
     if (items.length <= 1) return;
     
@@ -55,7 +54,6 @@ const FeaturedSlider = ({ items }) => {
     return () => clearInterval(interval);
   }, [currentIndex, items.length]);
 
-  // Manejar el scroll manual
   const handleScroll = (event) => {
     const newIndex = Math.round(event.nativeEvent.contentOffset.x / (width - 40));
     if (newIndex !== currentIndex) {
@@ -63,7 +61,6 @@ const FeaturedSlider = ({ items }) => {
     }
   };
 
-  // Asegurarse de que el índice esté dentro de los límites
   const getItemLayout = (_, index) => ({
     length: width - 40,
     offset: (width - 40) * index,
@@ -71,40 +68,42 @@ const FeaturedSlider = ({ items }) => {
   });
 
   const renderItem = ({ item }) => {
-    // Verificar si el item tiene una imagen válida
     const imageSource = item.imageSource || 
                        (item.image ? { uri: item.image } : require('../../assets/images/producto-default.jpg'));
-    
+    const itemPrice = Number(item.price ?? item.precio ?? 0);
+    const origPrice = Number(item.originalPrice ?? itemPrice);
+
     return (
-      <View style={styles.slide}>
+      <TouchableOpacity 
+        style={styles.slide}
+        activeOpacity={0.9}
+        onPress={() => onPressItem && onPressItem(item)}
+      >
         <View style={styles.featuredCard}>
-          <View style={styles.discountBadge}>
-            <Text style={styles.discountText}>
-              {Math.round(((item.originalPrice - item.price) / item.originalPrice) * 100)}% OFF
-            </Text>
-          </View>
+          {origPrice > itemPrice && (
+            <View style={styles.discountBadge}>
+              <Text style={styles.discountText}>
+                {Math.round(((origPrice - itemPrice) / origPrice) * 100)}% OFF
+              </Text>
+            </View>
+          )}
           <Image 
             source={imageSource}
             style={styles.featuredImage}
             resizeMode="cover"
             defaultSource={require('../../assets/images/producto-default.jpg')}
-            onError={(error) => {
-              console.log('Error al cargar la imagen:', error);
-              // Si hay un error, usar la imagen por defecto
-              if (typeof imageSource === 'object') {
-                imageSource.uri = null;
-              }
-            }}
           />
           <View style={styles.featuredInfo}>
-            <Text style={styles.featuredName} numberOfLines={1}>{item.name}</Text>
+            <Text style={styles.featuredName} numberOfLines={1}>{item.name || item.nombre}</Text>
             <View style={styles.priceContainer}>
-              <Text style={styles.originalPrice}>${item.originalPrice?.toFixed(2) || item.price.toFixed(2)}</Text>
-              <Text style={styles.discountedPrice}>${item.price.toFixed(2)}</Text>
+              {origPrice > itemPrice && (
+                <Text style={styles.originalPrice}>${origPrice.toFixed(2)}</Text>
+              )}
+              <Text style={styles.discountedPrice}>${itemPrice.toFixed(2)}</Text>
             </View>
           </View>
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -116,7 +115,7 @@ const FeaturedSlider = ({ items }) => {
         ref={flatListRef}
         data={items}
         renderItem={renderItem}
-        keyExtractor={item => item.id}
+        keyExtractor={(item, index) => (item.id || item.id_producto || index).toString()}
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
@@ -124,7 +123,7 @@ const FeaturedSlider = ({ items }) => {
         scrollEventThrottle={16}
         getItemLayout={getItemLayout}
         initialScrollIndex={0}
-        snapToInterval={width - 40} // Ajustar el snap para que se alinee correctamente
+        snapToInterval={width - 40}
         decelerationRate="fast"
         snapToAlignment="start"
         contentContainerStyle={styles.sliderContentContainer}
@@ -154,22 +153,22 @@ const FeaturedSlider = ({ items }) => {
   );
 };
 
-// Componente para la sección de categorías
-const CategorySection = ({ title, items, onPressItem }) => {
+const CategorySection = ({ title, items, onPressItem, onPressCombo, onAddComboToCart }) => {
   const renderItem = ({ item }) => (
     <View style={styles.productCard}>
       {item?.isCombo || item?.type === 'combo' ? (
-        <ComboCard combo={item} />
+        <ComboCard 
+          combo={item} 
+          onPress={() => onPressCombo(item)} 
+          onAddToCart={() => onAddComboToCart(item)}
+        />
       ) : (
-        <ProductCard product={item} onPress={() => onPressItem(item)} />
+        <ProductCard product={item} onPress={onPressItem} />
       )}
     </View>
   );
 
-  // Verificar si hay elementos para mostrar
-  if (!items || items.length === 0) {
-    return null; // No mostrar la sección si no hay elementos
-  }
+  if (!items || items.length === 0) return null;
 
   return (
     <View style={styles.categorySection}>
@@ -177,7 +176,7 @@ const CategorySection = ({ title, items, onPressItem }) => {
       <FlatList
         data={items}
         renderItem={renderItem}
-        keyExtractor={item => item.id}
+        keyExtractor={(item, index) => (item?.id || item?.id_producto || index).toString()}
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.categoryList}
@@ -192,26 +191,17 @@ const CategorySection = ({ title, items, onPressItem }) => {
 };
 
 const HomeScreen = ({ navigation }) => {
-  // Usar hooks personalizados
-  const { products, loading, error } = useProducts();
+  const { products, loading } = useProducts();
   const { searchQuery, setSearchQuery, searchResults, filterData } = useSearch();
   const { addItem } = useCart();
 
-  // Estado para el modal del menú
   const [menuVisible, setMenuVisible] = useState(false);
+  const [selectedCombo, setSelectedCombo] = useState(null);
+  const [comboModalVisible, setComboModalVisible] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState(null);
 
-  // Filtrar productos cuando cambia el término de búsqueda o los productos
   const filteredSections = searchQuery ? searchResults : products;
   
-  // Depuración: Mostrar las categorías disponibles
-  console.log('Categorías disponibles:', Object.keys(filteredSections).filter(cat => cat !== 'featured'));
-  Object.entries(filteredSections).forEach(([category, items]) => {
-    if (category !== 'featured') {
-      console.log(`Categoría ${category}:`, items?.length || 0, 'productos');
-    }
-  });
-  
-  // Manejar búsqueda
   const handleSearch = (query) => {
     setSearchQuery(query);
     if (query) {
@@ -219,17 +209,42 @@ const HomeScreen = ({ navigation }) => {
     }
   };
 
-  // Manejar clic en producto
   const handleProductPress = (product) => {
-    // Agregar al carrito al hacer clic
-    addItem(product, 1);
-    console.log('Producto agregado al carrito:', product.name);
+    if (product?.isCombo || product?.type === 'combo') {
+      setSelectedCombo(product);
+      setComboModalVisible(true);
+    } else {
+      setSelectedProduct(product);
+    }
   };
+
+  const handleComboPress = (combo) => {
+    setSelectedCombo(combo);
+    setComboModalVisible(true);
+  };
+
+  const allProductsList = Object.values(filteredSections || {})
+    .flat()
+    .filter(item => item && !item.isCombo && item.type !== 'combo');
+
+  const selectedProdId = selectedProduct?.id || selectedProduct?.id_producto;
+  const selectedCategory = selectedProduct?.category
+    || selectedProduct?.categoria_nombre
+    || selectedProduct?.categoria;
+  const relatedProducts = allProductsList.filter((product) => {
+    const productCategory = product?.category
+      || product?.categoria_nombre
+      || product?.categoria;
+
+    return productCategory === selectedCategory
+      && (product.id || product.id_producto) !== selectedProdId;
+  });
 
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <Text>Cargando productos...</Text>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+        <Text style={{ marginTop: 10 }}>Cargando productos...</Text>
       </View>
     );
   }
@@ -254,33 +269,35 @@ const HomeScreen = ({ navigation }) => {
           </View>
           <ScrollView style={styles.container}>
             <View style={styles.contentContainer}>
-              {/* Sección de ofertas destacadas */}
               {filteredSections.featured && filteredSections.featured.length > 0 && (
                 <View style={styles.section}>
                   <Text style={styles.sectionHeader}>Ofertas Especiales</Text>
-                  <FeaturedSlider items={filteredSections.featured} />
+                  <FeaturedSlider 
+                    items={filteredSections.featured} 
+                    onPressItem={handleProductPress}
+                  />
                 </View>
               )}
 
-            {/* Secciones por categoría */}
-            {Object.keys(filteredSections).map(category => {
-              if (category === 'featured') return null; // Ya mostramos las ofertas arriba
+              {Object.keys(filteredSections).map(category => {
+                if (category === 'featured') return null;
 
-              return (
-                <CategorySection
-                  key={category}
-                  title={sectionTitles[category] || category}
-                  items={filteredSections[category]}
-                  onPressItem={handleProductPress}
-                />
-              );
-            })}
+                return (
+                  <CategorySection
+                    key={category}
+                    title={sectionTitles[category] || category}
+                    items={filteredSections[category]}
+                    onPressItem={handleProductPress}
+                    onPressCombo={handleComboPress}
+                    onAddComboToCart={(combo) => addItem(combo, 1)}
+                  />
+                );
+              })}
             </View>
           </ScrollView>
         </ImageBackground>
       </ScreenWithHeader>
 
-      {/* Botón flotante de menú */}
       <TouchableOpacity
         style={styles.menuButton}
         onPress={() => setMenuVisible(true)}
@@ -288,10 +305,25 @@ const HomeScreen = ({ navigation }) => {
         <Ionicons name="menu" size={24} color={COLORS.white} />
       </TouchableOpacity>
 
-      {/* Modal del menú */}
       <MenuModal
         visible={menuVisible}
         onClose={() => setMenuVisible(false)}
+      />
+
+      <ComboDetailModal
+        visible={comboModalVisible}
+        combo={selectedCombo}
+        onClose={() => setComboModalVisible(false)}
+        onAddToCart={(combo) => addItem(combo, 1)}
+      />
+
+      <ProductDetailModal
+        visible={!!selectedProduct}
+        product={selectedProduct}
+        relatedProducts={relatedProducts}
+        onClose={() => setSelectedProduct(null)}
+        onAddToCart={(product, quantity) => addItem(product, quantity || 1)}
+        onSelectProduct={(product) => setSelectedProduct(product)}
       />
     </>
   );
@@ -303,14 +335,14 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   contentContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.8)', // Fondo semitransparente solo para el contenido
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
     borderRadius: 12,
     margin: 10,
     padding: 10,
     flex: 1,
   },
   backgroundImage: {
-    ...StyleSheet.absoluteFillObject, // Esto hará que la imagen ocupe toda la pantalla
+    ...StyleSheet.absoluteFillObject,
   },
   section: {
     marginBottom: 24,
@@ -322,20 +354,19 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     color: COLORS.darkGray,
   },
-  // Estilos para el slider de ofertas
   sliderContainer: {
-    height: 240, // Reducir altura total del slider
+    height: 240,
     paddingVertical: 8,
   },
   slide: {
-    width: width - 60, // Hacer las tarjetas un poco más angostas
+    width: width - 60,
     marginHorizontal: 8,
     borderRadius: 10,
     overflow: 'hidden',
     backgroundColor: COLORS.white,
     ...theme.shadow.sm,
     marginBottom: 8,
-    height: 240, // Reducir altura de las tarjetas
+    height: 240,
   },
   featuredCard: {
     flex: 1,
@@ -360,7 +391,7 @@ const styles = StyleSheet.create({
   },
   featuredImage: {
     width: '100%',
-    height: 150, // Reducir altura de la imagen
+    height: 150,
     backgroundColor: '#f8f8f8',
   },
   featuredInfo: {
@@ -433,7 +464,6 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     zIndex: 1000,
   },
-  // Estilos para las secciones de categorías
   categorySection: {
     marginBottom: 24,
     width: '100%',

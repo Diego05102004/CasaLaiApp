@@ -32,8 +32,7 @@ const MenuModal = ({ visible, onClose }) => {
     { id: '1', title: 'Catálogo', icon: 'grid-outline' },
     { id: '2', title: 'Mi Perfil', icon: 'person-outline' },
     { id: '3', title: 'Mis Pedidos', icon: 'receipt-outline' },
-    { id: '4', title: 'Configuración', icon: 'settings-outline' },
-    { id: '5', title: 'Ayuda', icon: 'help-circle-outline' },
+    { id: '4', title: 'Ayuda', icon: 'help-circle-outline' },
   ];
 
   const handleMenuItemPress = (itemId) => {
@@ -43,6 +42,8 @@ const MenuModal = ({ visible, onClose }) => {
       navigation.navigate('Profile');
     } else if (itemId === '3') {
       navigation.navigate('Pedidos');
+    } else if (itemId === '4') {
+      navigation.navigate('Help');
     }
     onClose();
   };

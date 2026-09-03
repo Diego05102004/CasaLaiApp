@@ -6,56 +6,69 @@ import COLORS from '../constants/colors';
 import theme from '../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 
-// Función para obtener la imagen de un producto
 const getProductImage = (imageName) => {
-  // Mapeo estático de imágenes para evitar requires dinámicos
   const imageMap = {
     'producto-default': require('../assets/images/producto-default.jpg'),
   };
-  
   return imageMap[imageName] || imageMap['producto-default'];
 };
 
-const ProductCard = ({ product }) => {
+const ProductCard = ({ product, onPress, onAddToCart }) => {
   const dispatch = useDispatch();
   const isCombo = Boolean(product?.isCombo || product?.type === 'combo');
   const productName = product?.name || product?.nombre || product?.nombre_combo || 'Producto';
   const productPrice = Number(product?.price ?? product?.precio ?? 0);
 
+  const handlePress = () => {
+    console.log('Tarjeta presionada:', productName);
+    if (onPress) {
+      onPress(product);
+    }
+  };
+
   const handleAddToCart = () => {
-    const imageToUse = product.imageSource || 
-                      (product.image ? { uri: product.image } : require('../assets/images/producto-default.jpg'));
+    if (onAddToCart) {
+      onAddToCart(product);
+      return;
+    }
+
+    const imageToUse = product?.imageSource || 
+                      (product?.image ? { uri: product.image } : require('../assets/images/producto-default.jpg'));
     
     dispatch(addToCart({
-      id: product.id,
+      id: product?.id || product?.id_producto,
       name: productName,
       price: productPrice,
       image: imageToUse,
-      imageUrl: typeof product.image === 'string' ? product.image : null,
+      imageUrl: typeof product?.image === 'string' ? product.image : null,
       isCombo,
-      comboProducts: product.products || []
+      comboProducts: product?.products || []
     }));
   };
+
+  const imageSource = product?.imageSource || 
+    (typeof product?.image === 'string' ? { uri: product.image } : getProductImage(product?.image));
 
   return (
     <View style={styles.card}>
       <TouchableOpacity 
-        onPress={() => console.log('Ver detalle del producto:', product.id)}
+        onPress={handlePress}
         style={styles.touchableArea}
+        activeOpacity={0.7}
       >
         <View style={styles.imageContainer}>
           <Image 
-            source={product.imageSource || getProductImage(product.image)} 
+            source={imageSource} 
             style={styles.image} 
             resizeMode="cover"
-            onError={(error) => console.log('Error loading image:', error.nativeEvent.error)}
+            onError={(error) => console.log('Error de imagen:', error.nativeEvent.error)}
           />
         </View>
         <View style={styles.details}>
           <Text style={styles.name} numberOfLines={1}>{productName}</Text>
-          {isCombo && product.products?.length > 0 ? (
+          {isCombo && product?.products?.length > 0 ? (
             <Text style={styles.comboInfo} numberOfLines={2}>
-              {product.products.slice(0, 2).map((item) => item.name).join(', ')}
+              {product.products.slice(0, 2).map((item) => item.name || item.nombre).join(', ')}
               {product.products.length > 2 ? '...' : ''}
             </Text>
           ) : null}
@@ -66,6 +79,7 @@ const ProductCard = ({ product }) => {
       <TouchableOpacity 
         style={styles.addButton}
         onPress={handleAddToCart}
+        activeOpacity={0.8}
       >
         <Ionicons name="cart-outline" size={20} color={COLORS.white} />
         <Text style={styles.addButtonText}>{isCombo ? 'Combo' : 'Agregar'}</Text>

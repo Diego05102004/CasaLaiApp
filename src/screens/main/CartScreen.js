@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, Image, TouchableOpacity, ScrollView, TextInput, Alert, ActivityIndicator, Modal } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Image, TouchableOpacity, TextInput, Alert, ActivityIndicator, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useSelector, useDispatch } from 'react-redux';
@@ -7,8 +7,6 @@ import { removeFromCart, clearCart, updateQuantity } from '../../redux/slices/ca
 import COLORS from '../../constants/colors';
 import theme from '../../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
-import MenuModal from '../../components/common/MenuModal';
-import { securePost } from '../../utils/api';
 
 const getOrderProducts = (cartItems) => {
   const productsById = new Map();
@@ -63,8 +61,6 @@ const CartScreen = () => {
   const { items, total } = useSelector(state => state.cart);
   const { user, jwtPayload } = useSelector(state => state.auth);
 
-  // Estado para el modal del menú
-  const [menuVisible, setMenuVisible] = useState(false);
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
   const [successModalVisible, setSuccessModalVisible] = useState(false);
 
@@ -236,7 +232,6 @@ const CartScreen = () => {
   };
 
   const renderItem = ({ item }) => {
-    // Determinar la fuente de la imagen
     const imageSource = item.image || 
                        (item.imageUrl ? { uri: item.imageUrl } : null);
     
@@ -321,8 +316,8 @@ const CartScreen = () => {
         <View style={styles.header}>
           <Text style={styles.title}>Mi Carrito</Text>
           <TouchableOpacity onPress={handleClearCart} style={styles.clearButton}>
-            <Ionicons name="trash-outline" size={16} color={COLORS.white} style={{marginRight: 5}} />
-            <Text>Vaciar</Text>
+            <Ionicons name="trash-outline" size={21} color={COLORS.white} style={{marginRight: 5}} />
+            <Text style={{ color: COLORS.white, fontSize: 16 }}>Vaciar</Text>
           </TouchableOpacity>
         </View>
 
@@ -347,25 +342,11 @@ const CartScreen = () => {
             {isCreatingOrder ? (
               <ActivityIndicator color={COLORS.white} size="small" />
             ) : (
-              <Text style={styles.checkoutButtonText}>Generar pedido</Text>
+              <Text style={styles.checkoutButtonText}>Generar Pedido</Text>
             )}
           </TouchableOpacity>
         </View>
       </SafeAreaView>
-
-      {/* Botón flotante de menú */}
-      <TouchableOpacity
-        style={styles.menuButton}
-        onPress={() => setMenuVisible(true)}
-      >
-        <Ionicons name="menu" size={24} color={COLORS.white} />
-      </TouchableOpacity>
-
-      {/* Modal del menú */}
-      <MenuModal
-        visible={menuVisible}
-        onClose={() => setMenuVisible(false)}
-      />
 
       <Modal
         animationType="fade"
@@ -572,26 +553,12 @@ const styles = StyleSheet.create({
     padding: theme.spacing.md,
     alignItems: 'center',
   },
+  checkoutButtonDisabled: {
+    opacity: 0.7,
+  },
   checkoutButtonText: {
     ...theme.typography.button,
     color: COLORS.white,
-  },
-  menuButton: {
-    position: 'absolute',
-    bottom: 20,
-    right: 20,
-    backgroundColor: COLORS.primary,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    zIndex: 1000,
   },
   modalOverlay: {
     flex: 1,

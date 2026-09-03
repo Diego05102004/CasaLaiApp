@@ -18,11 +18,13 @@ const cartSlice = createSlice({
         imageUrl,
         isCombo = false,
         comboProducts = [],
+        quantity = 1,
       } = action.payload;
+      const requestedQuantity = Math.max(1, Math.floor(Number(quantity) || 1));
       const existingItem = state.items.find(item => item.id === id && item.isCombo === isCombo);
       
       if (existingItem) {
-        existingItem.quantity += 1;
+        existingItem.quantity += requestedQuantity;
       } else {
         state.items.push({
           id,
@@ -32,7 +34,7 @@ const cartSlice = createSlice({
           imageUrl,
           isCombo,
           comboProducts: isCombo ? comboProducts : [],
-          quantity: 1,
+          quantity: requestedQuantity,
         });
       }
       

@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 const defaultImage = require('../assets/images/producto-default.jpg');
 
-const ComboCard = ({ combo }) => {
+const ComboCard = ({ combo, onPress, onAddToCart }) => {
   const dispatch = useDispatch();
   const name = combo?.name || combo?.nombre_combo || combo?.nombre || 'Combo';
   const price = Number(combo?.price ?? combo?.precio_final ?? combo?.precio_total ?? combo?.precio ?? 0);
@@ -21,20 +21,32 @@ const ComboCard = ({ combo }) => {
   const imageSource = combo?.imageSource || (combo?.image ? { uri: combo.image } : getItemImage(items[0]));
 
   const handleAddToCart = () => {
-    dispatch(addToCart({
-      id: combo?.id,
-      name,
-      price,
-      image: imageSource,
-      imageUrl: typeof combo?.image === 'string' ? combo.image : null,
-      isCombo: true,
-      comboProducts: items,
-    }));
+    if (onAddToCart) {
+      onAddToCart(combo);
+    } else {
+      dispatch(addToCart({
+        id: combo?.id,
+        name,
+        price,
+        image: imageSource,
+        imageUrl: typeof combo?.image === 'string' ? combo.image : null,
+        isCombo: true,
+        comboProducts: items,
+      }));
+    }
+  };
+
+  const handlePressCard = () => {
+    if (onPress) {
+      onPress(combo);
+    } else {
+      console.log('[ComboCard] Combo seleccionado:', combo?.id);
+    }
   };
 
   return (
     <View style={styles.card}>
-      <TouchableOpacity style={styles.touchableArea} onPress={() => console.log('[ComboCard] Combo seleccionado:', combo?.id)}>
+      <TouchableOpacity style={styles.touchableArea} onPress={handlePressCard}>
         <View style={styles.imageContainer}>
           <Image source={imageSource} style={styles.image} resizeMode="cover" />
           <View style={styles.badge}>
@@ -68,7 +80,7 @@ const ComboCard = ({ combo }) => {
 
       <TouchableOpacity style={styles.addButton} onPress={handleAddToCart}>
         <Ionicons name="cart-outline" size={20} color={COLORS.white} />
-        <Text style={styles.addButtonText}>Agregar combo</Text>
+        <Text style={styles.addButtonText}>Agregar</Text>
       </TouchableOpacity>
     </View>
   );
@@ -80,7 +92,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
     borderRadius: 8,
     margin: 8,
-    minWidth: 150,
+    minWidth: 160,
     maxWidth: 220,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },

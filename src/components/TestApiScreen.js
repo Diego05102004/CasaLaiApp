@@ -7,7 +7,7 @@ const TestApiScreen = () => {
   const [respuesta, setRespuesta] = useState(null);
 
   // REEMPLAZA CON LA URL DE TU HOSTING REAL O DE LOCALTUNNEL
-  const API_URL = 'https://spotty-sites-beg.loca.lt/proyecto-casalai-ca/api/test_ping.php';
+  const API_URL = 'https://dull-dragons-cross.loca.lt/proyecto-casalai-ca/api/test_ping.php';
 
   const enviarPeticionHTTPS = async () => {
     setLoading(true);

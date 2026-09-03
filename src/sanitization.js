@@ -288,6 +288,12 @@ export const sanitizeForAPI = (data, schema = null) => {
     Object.keys(schema).forEach((key) => {
       if (sanitized[key] !== undefined) {
         const rule = schema[key];
+
+        // Los tokens externos son valores opacos; no deben modificarse.
+        if (rule.type === 'token') {
+          sanitized[key] = data[key];
+          return;
+        }
         
         if (rule.type === 'email') {
           sanitized[key] = sanitizeEmail(sanitized[key]);
