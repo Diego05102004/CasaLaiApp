@@ -12,8 +12,19 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import COLORS from '../constants/colors';
 import theme from '../constants/theme';
+import { InvocarMetodo } from '../utils/comunicadorApi';
 
 const { width } = Dimensions.get('window');
+
+const formatFeatureLabel = (label) => label
+  .replace(/_/g, ' ')
+  .replace(/\b\w/g, (character) => character.toUpperCase());
+
+const formatFeatureValue = (value) => {
+  if (value === null || value === undefined || value === '') return 'N/A';
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+};
 
 const ProductDetailModal = ({
   visible,
@@ -25,21 +36,51 @@ const ProductDetailModal = ({
   onSelectProduct,
 }) => {
   const [quantity, setQuantity] = useState(1);
+  const [detailProduct, setDetailProduct] = useState(null);
 
   useEffect(() => {
-    if (visible) {
-      setQuantity(1);
-    }
+    if (!visible || !product) return undefined;
+
+    setQuantity(1);
+    setDetailProduct(null);
+
+    const productId = product.id || product.id_producto;
+    if (!productId) return undefined;
+
+    let isActive = true;
+    InvocarMetodo('productos.php', 'detallado', { id: productId })
+      .then((response) => {
+        if (!isActive || response?.status !== 'success') return;
+
+        const detailedData = response.data?.producto || response.data?.productos?.[0];
+        const characteristics = response.data?.caracteristicas ?? detailedData?.caracteristicas;
+        if (detailedData) {
+          setDetailProduct({
+            ...product,
+            ...detailedData,
+            caracteristicas: characteristics,
+          });
+        }
+      })
+      .catch(() => {
+        if (isActive) setDetailProduct(null);
+      });
+
+    return () => {
+      isActive = false;
+    };
   }, [visible, product]);
 
   if (!product) return null;
 
-  const priceUsd = Number(product.precio ?? product.price ?? 0);
+  const displayedProduct = detailProduct || product;
+
+  const priceUsd = Number(displayedProduct.precio ?? displayedProduct.price ?? 0);
   const priceBs = (priceUsd * tasaBcv).toLocaleString('es-VE', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
-  const stock = Number(product.stock ?? product.existencia ?? 0);
+  const stock = Number(displayedProduct.stock ?? displayedProduct.existencia ?? 0);
 
   const handleIncrement = () => {
     if (stock > 0 && quantity < stock) {
@@ -68,8 +109,16 @@ const ProductDetailModal = ({
   };
 
   const mainImage = resolveImageSource(
-    product.imageSource || product.imagen || product.image || product.imageUrl
+    displayedProduct.imageSource || displayedProduct.imagen || displayedProduct.image || displayedProduct.imageUrl
   );
+
+  const rawFeatures = displayedProduct.features
+    || displayedProduct.caracteristicas
+    || displayedProduct.caracteristica;
+  const featureEntries = rawFeatures && typeof rawFeatures === 'object'
+    ? Object.entries(rawFeatures)
+    : [];
+  const hasTextFeatures = rawFeatures && typeof rawFeatures !== 'object';
 
   return (
     <Modal
@@ -99,27 +148,27 @@ const ProductDetailModal = ({
               </View>
 
               <View style={styles.infoContainer}>
-                <Text style={styles.title}>{product.nombre || product.name || 'Producto'}</Text>
+                <Text style={styles.title}>{displayedProduct.nombre || displayedProduct.name || 'Producto'}</Text>
 
                 <Text style={styles.metaText}>
-                  Marca: <Text style={styles.metaValue}>{product.brand || product.marca || product.nombre_marca || 'N/A'}</Text>
+                  Marca: <Text style={styles.metaValue}>{displayedProduct.brand || displayedProduct.marca || displayedProduct.nombre_marca || 'N/A'}</Text>
                   {'  •  '}
-                  Modelo: <Text style={styles.metaValue}>{product.model || product.modelo || product.nombre_modelo || 'N/A'}</Text>
+                  Modelo: <Text style={styles.metaValue}>{displayedProduct.model || displayedProduct.modelo || displayedProduct.nombre_modelo || 'N/A'}</Text>
                 </Text>
 
                 <Text style={styles.metaText}>
-                  Serial: <Text style={styles.metaValue}>{product.serial || 'N/A'}</Text>
+                  Serial: <Text style={styles.metaValue}>{displayedProduct.serial || 'N/A'}</Text>
                 </Text>
 
                 <View style={styles.categoryRow}>
                   <Text style={styles.metaText}>Categoría: </Text>
                   <View style={styles.categoryBadge}>
-                    <Text style={styles.categoryText}>{product.category || product.categoria || product.categoria_nombre || 'Otros'}</Text>
+                    <Text style={styles.categoryText}>{displayedProduct.category || displayedProduct.categoria || displayedProduct.categoria_nombre || 'Otros'}</Text>
                   </View>
                 </View>
 
-                {!!product.descripcion && (
-                  <Text style={styles.description}>{product.descripcion}</Text>
+                {!!(displayedProduct.description || displayedProduct.descripcion) && (
+                  <Text style={styles.description}>{displayedProduct.description || displayedProduct.descripcion}</Text>
                 )}
 
                 <View style={styles.priceRow}>
@@ -165,15 +214,24 @@ const ProductDetailModal = ({
                 </View>
 
                 <Text style={styles.warrantyText}>
-                  Garantía: {product.garantia || 'Garantía de 1 mes de duración'}
+                  Garantía: {displayedProduct.garantia || 'Garantía de 1 mes de duración'}
                 </Text>
               </View>
             </View>
 
             <View style={styles.sectionDivider} />
             <Text style={styles.sectionTitle}>CARACTERÍSTICAS</Text>
-            {product.features || product.caracteristicas || product.caracteristica ? (
-              <Text style={styles.featuresText}>{product.features || product.caracteristicas || product.caracteristica}</Text>
+            {featureEntries.length > 0 ? (
+              <View style={styles.featuresList}>
+                {featureEntries.map(([label, value]) => (
+                  <View key={label} style={styles.featureRow}>
+                    <Text style={styles.featureLabel}>{formatFeatureLabel(label)}</Text>
+                    <Text style={styles.featuresText}>{formatFeatureValue(value)}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : hasTextFeatures ? (
+              <Text style={styles.featuresText}>{formatFeatureValue(rawFeatures)}</Text>
             ) : (
               <Text style={styles.emptySectionText}>
                 Este producto no tiene características registradas para su categoría.
@@ -425,6 +483,23 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: COLORS.text || '#334155',
     lineHeight: 18,
+  },
+  featuresList: {
+    gap: 8,
+  },
+  featureRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+    paddingBottom: 6,
+  },
+  featureLabel: {
+    width: '42%',
+    fontSize: 13,
+    color: COLORS.textSecondary || '#64748b',
+    fontWeight: '700',
+    textTransform: 'capitalize',
   },
   emptySectionText: {
     fontSize: 12,
