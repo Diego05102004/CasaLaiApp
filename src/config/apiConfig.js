@@ -12,22 +12,22 @@ export const API_BASE_URL = (
   'http://localhost/Repositorio%20de%20GITHUB/proyecto-casalai-main/proyecto-casalai-ca/api'
 ).replace(/\/+$/, '');
 
+const PROJECT_SERVER_ROOT = 'C:/xampp/htdocs/Repositorio de GITHUB/proyecto-casalai-main/proyecto-casalai-ca';
+
 // Ruta real del servidor donde PHP debe guardar la imagen.
 // IMPORTANTE: esto NO es una URL para el navegador; es una ruta del sistema de archivos.
 // En XAMPP debe apuntar a la carpeta física del proyecto, no a una URL pública.
-export const PROFILE_IMAGE_STORAGE_PATH = 'C:/xampp/htdocs/proyecto-casalai-ca/assets/img/uploads/';
+export const PROFILE_IMAGE_STORAGE_PATH = `${PROJECT_SERVER_ROOT}/assets/img/uploads/`;
 
 // URL pública para acceder a la imagen desde la app.
 // Esta URL sí se usa para leer la imagen desde el navegador o desde React Native.
 export const PROFILE_IMAGE_PUBLIC_URL = 'http://localhost/Repositorio%20de%20GITHUB/proyecto-casalai-main/proyecto-casalai-ca/assets/img/uploads/';
 
-// Ruta real del servidor donde PHP debe guardar la imagen.
+// Ruta real del servidor donde PHP debe guardar la imagen del comprobante de pago.
 // IMPORTANTE: esto NO es una URL para el navegador; es una ruta del sistema de archivos.
-// En XAMPP debe apuntar a la carpeta física del proyecto, no a una URL pública.
-export const PAGOS_IMAGE_STORAGE_PATH = 'C:/xampp/htdocs/proyecto-casalai-ca/assets/img/uploads/comprobantes/';
+export const PAGOS_IMAGE_STORAGE_PATH = `${PROJECT_SERVER_ROOT}/assets/img/uploads/comprobantes/`;
 
-// URL pública para acceder a la imagen desde la app.
-// Esta URL sí se usa para leer la imagen desde el navegador o desde React Native.
+// URL pública para acceder a la imagen del comprobante desde la app.
 export const PAGOS_IMAGE_PUBLIC_URL = 'http://localhost/Repositorio%20de%20GITHUB/proyecto-casalai-main/proyecto-casalai-ca/assets/img/uploads/comprobantes/';
 
 // Normaliza una ruta de imagen para que funcione tanto con rutas relativas del servidor,
