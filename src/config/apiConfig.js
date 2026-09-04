@@ -9,17 +9,17 @@
 // y para el emulador Android normalmente usa 10.0.2.2 en lugar de localhost.
 export const API_BASE_URL = (
   process.env.EXPO_PUBLIC_API_URL ||
-  'http://localhost/Repositorio%20de%20GITHUB/proyecto-casalai-main/proyecto-casalai-ca/api'
+  'http://localhost/proyecto-casalai-ca/api'
 ).replace(/\/+$/, '');
 
 // Ruta real del servidor donde PHP debe guardar la imagen.
 // IMPORTANTE: esto NO es una URL para el navegador; es una ruta del sistema de archivos.
 // En XAMPP debe apuntar a la carpeta física del proyecto, no a una URL pública.
-export const PROFILE_IMAGE_STORAGE_PATH = 'C:/xampp/htdocs/Repositorio de GITHUB/proyecto-casalai-main/proyecto-casalai-ca/assets/img/uploads/';
+export const PROFILE_IMAGE_STORAGE_PATH = 'C:/xampp/htdocs/proyecto-casalai-ca/assets/img/uploads/';
 
 // URL pública para acceder a la imagen desde la app.
 // Esta URL sí se usa para leer la imagen desde el navegador o desde React Native.
-export const PROFILE_IMAGE_PUBLIC_URL = 'http://localhost/Repositorio%20de%20GITHUB/proyecto-casalai-main/proyecto-casalai-ca/assets/img/uploads/';
+export const PROFILE_IMAGE_PUBLIC_URL = 'http://localhost/proyecto-casalai-ca/assets/img/uploads/';
 
 // Normaliza una ruta de imagen para que funcione tanto con rutas relativas del servidor,
 // rutas absolutas del sistema de archivos, como con URLs completas ya resueltas.
