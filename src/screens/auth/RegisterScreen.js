@@ -118,7 +118,6 @@ const RegisterScreen = ({ navigation }) => {
     if (!validateForm()) {
       return;
     }
-
     try {
       const result = await dispatch(registerUser({
         username: nombreUsuario,
@@ -142,158 +141,192 @@ const RegisterScreen = ({ navigation }) => {
     }
   };
 
-  return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+  const formContent = (
+    <ScrollView
+      style={styles.scrollView}
+      contentContainerStyle={styles.scrollContainer}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={true}
     >
-      <ScrollView
-        contentContainerStyle={styles.scrollContainer}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={true}
-      >
-        <View style={styles.header}>
-          <Text style={styles.title}>Registro de Usuario</Text>
-          <Text style={styles.subtitle}>Crea tu cuenta para comenzar</Text>
+      <View style={styles.header}>
+        <Text style={styles.title}>Registro de Usuario</Text>
+        <Text style={styles.subtitle}>Crea tu cuenta para comenzar</Text>
+      </View>
+
+      <View style={styles.form}>
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Nombre</Text>
+          <TextInput
+            style={[styles.input, errors.nombre && styles.inputError]}
+            placeholderTextColor={COLORS.placeholder}
+            placeholder="Ingrese su nombre(s)"
+            value={nombre}
+            onChangeText={handleNombreChange}
+            maxLength={50}
+          />
+          {errors.nombre ? <Text style={styles.errorText}>{errors.nombre}</Text> : null}
         </View>
 
-        <View style={styles.form}>
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Nombre de Usuario</Text>
-            <TextInput
-              style={[styles.input, errors.nombreUsuario && styles.inputError]}
-              placeholder="usuario123"
-              value={nombreUsuario}
-              onChangeText={handleNombreUsuarioChange}
-              autoCapitalize="none"
-              maxLength={20}
-            />
-            {errors.nombreUsuario ? <Text style={styles.errorText}>{errors.nombreUsuario}</Text> : null}
-          </View>
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Apellido</Text>
+          <TextInput
+            style={[styles.input, errors.apellido && styles.inputError]}
+            placeholderTextColor={COLORS.placeholder}
+            placeholder="Ingrese su apellido(s)"
+            value={apellido}
+            onChangeText={handleApellidoChange}
+            maxLength={50}
+          />
+          {errors.apellido ? <Text style={styles.errorText}>{errors.apellido}</Text> : null}
+        </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Contraseña</Text>
-            <View style={[styles.passwordInputContainer, errors.clave && styles.inputError]}>
-              <TextInput
-                style={styles.passwordInput}
-                placeholder="••••••••"
-                value={clave}
-                onChangeText={handleClaveChange}
-                secureTextEntry={!showPassword}
-                maxLength={15}
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Nombre de Usuario</Text>
+          <TextInput
+            style={[styles.input, errors.nombreUsuario && styles.inputError]}
+            placeholderTextColor={COLORS.placeholder}
+            placeholder="usuario123"
+            value={nombreUsuario}
+            onChangeText={handleNombreUsuarioChange}
+            autoCapitalize="none"
+            maxLength={20}
+          />
+          {errors.nombreUsuario ? <Text style={styles.errorText}>{errors.nombreUsuario}</Text> : null}
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Cédula</Text>
+          <TextInput
+            style={[styles.input, errors.cedula && styles.inputError]}
+            placeholderTextColor={COLORS.placeholder}
+            placeholder="1.234.567 o 12.345.678"
+            value={cedula}
+            onChangeText={handleCedulaChange}
+            keyboardType="numeric"
+            maxLength={10}
+          />
+          {errors.cedula ? <Text style={styles.errorText}>{errors.cedula}</Text> : null}
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Teléfono</Text>
+          <TextInput
+            style={[styles.input, errors.telefono && styles.inputError]}
+            placeholderTextColor={COLORS.placeholder}
+            placeholder="0400-000-0000"
+            value={telefono}
+            onChangeText={handleTelefonoChange}
+            keyboardType="phone-pad"
+            maxLength={13}
+          />
+          {errors.telefono ? <Text style={styles.errorText}>{errors.telefono}</Text> : null}
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Correo Electrónico</Text>
+          <TextInput
+            style={[styles.input, errors.correo && styles.inputError]}
+            placeholderTextColor={COLORS.placeholder}
+            placeholder="ejemplo@gmail.com"
+            value={correo}
+            onChangeText={handleCorreoChange}
+            autoCapitalize="none"
+            keyboardType="email-address"
+            maxLength={50}
+          />
+          {errors.correo ? <Text style={styles.errorText}>{errors.correo}</Text> : null}
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Dirección</Text>
+          <TextInput
+            style={[styles.input, errors.direccion && styles.inputError]}
+            placeholderTextColor={COLORS.placeholder}
+            placeholder="Ingrese su dirección completa"
+            value={direccion}
+            onChangeText={handleDireccionChange}
+            multiline
+            maxLength={100}
+          />
+          {errors.direccion ? <Text style={styles.errorText}>{errors.direccion}</Text> : null}
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Contraseña</Text>
+          <View style={[styles.passwordInputContainer, errors.clave && styles.inputError]}>
+            <TextInput
+              style={styles.passwordInput}
+              placeholderTextColor={COLORS.placeholder}
+              placeholder="Crea una contraseña"
+              value={clave}
+              onChangeText={handleClaveChange}
+              secureTextEntry={!showPassword}
+              maxLength={15}
+            />
+            <TouchableOpacity
+              style={styles.eyeButton}
+              onPress={() => setShowPassword(!showPassword)}
+            >
+              <Ionicons
+                name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                size={22}
+                color={COLORS.textSecondary || '#666'}
               />
-              <TouchableOpacity
-                style={styles.eyeButton}
-                onPress={() => setShowPassword(!showPassword)}
-              >
-                <Ionicons
-                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                  size={22}
-                  color={COLORS.textSecondary || '#666'}
-                />
-              </TouchableOpacity>
-            </View>
-            {errors.clave ? <Text style={styles.errorText}>{errors.clave}</Text> : null}
+            </TouchableOpacity>
           </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Nombre</Text>
-            <TextInput
-              style={[styles.input, errors.nombre && styles.inputError]}
-              placeholder="Juan"
-              value={nombre}
-              onChangeText={handleNombreChange}
-              maxLength={50}
-            />
-            {errors.nombre ? <Text style={styles.errorText}>{errors.nombre}</Text> : null}
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Apellido</Text>
-            <TextInput
-              style={[styles.input, errors.apellido && styles.inputError]}
-              placeholder="Pérez"
-              value={apellido}
-              onChangeText={handleApellidoChange}
-              maxLength={50}
-            />
-            {errors.apellido ? <Text style={styles.errorText}>{errors.apellido}</Text> : null}
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Correo Electrónico</Text>
-            <TextInput
-              style={[styles.input, errors.correo && styles.inputError]}
-              placeholder="juan@gmail.com"
-              value={correo}
-              onChangeText={handleCorreoChange}
-              autoCapitalize="none"
-              keyboardType="email-address"
-              maxLength={50}
-            />
-            {errors.correo ? <Text style={styles.errorText}>{errors.correo}</Text> : null}
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Teléfono</Text>
-            <TextInput
-              style={[styles.input, errors.telefono && styles.inputError]}
-              placeholder="0414-123-4567"
-              value={telefono}
-              onChangeText={handleTelefonoChange}
-              keyboardType="phone-pad"
-              maxLength={13}
-            />
-            {errors.telefono ? <Text style={styles.errorText}>{errors.telefono}</Text> : null}
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Cédula</Text>
-            <TextInput
-              style={[styles.input, errors.cedula && styles.inputError]}
-              placeholder="12.345.678"
-              value={cedula}
-              onChangeText={handleCedulaChange}
-              keyboardType="numeric"
-              maxLength={10}
-            />
-            {errors.cedula ? <Text style={styles.errorText}>{errors.cedula}</Text> : null}
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Dirección</Text>
-            <TextInput
-              style={[styles.input, errors.direccion && styles.inputError]}
-              placeholder="Dirección completa"
-              value={direccion}
-              onChangeText={handleDireccionChange}
-              multiline
-              maxLength={100}
-            />
-            {errors.direccion ? <Text style={styles.errorText}>{errors.direccion}</Text> : null}
-          </View>
-
-          <TouchableOpacity
-            style={[styles.button, loading && styles.buttonDisabled]}
-            onPress={handleRegister}
-            disabled={loading}
-          >
-            <Text style={styles.buttonText}>
-              {loading ? 'Registrando...' : 'Registrarse'}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.linkButton}
-            onPress={() => navigation.navigate('Login')}
-          >
-            <Text style={styles.linkText}>
-              ¿Ya tienes cuenta? Inicia Sesión
-            </Text>
-          </TouchableOpacity>
+          {errors.clave ? <Text style={styles.errorText}>{errors.clave}</Text> : null}
         </View>
-      </ScrollView>
 
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Confirmar Contraseña</Text>
+          <View style={[styles.passwordInputContainer, errors.claveConfirmar && styles.inputError]}>
+            <TextInput
+              style={styles.passwordInput}
+              placeholderTextColor={COLORS.placeholder}
+              placeholder="Confirma tu contraseña"
+              value={claveConfirmar}
+              onChangeText={handleClaveConfirmarChange}
+              secureTextEntry={!showConfirmPassword}
+              maxLength={15}
+            />
+            <TouchableOpacity
+              style={styles.eyeButton}
+              onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+            >
+              <Ionicons
+                name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'}
+                size={22}
+                color={COLORS.textSecondary || '#666'}
+              />
+            </TouchableOpacity>
+          </View>
+          {errors.claveConfirmar ? <Text style={styles.errorText}>{errors.claveConfirmar}</Text> : null}
+        </View>
+
+        <TouchableOpacity
+          style={[styles.button, loading && styles.buttonDisabled]}
+          onPress={handleRegister}
+          disabled={loading}
+        >
+          <Text style={styles.buttonText}>
+            {loading ? 'Registrando...' : 'Registrarse'}
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.linkButton}
+          onPress={() => navigation.navigate('Login')}
+        >
+          <Text style={styles.linkText}>
+            ¿Ya tienes cuenta? Inicia Sesión
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </ScrollView>
+  );
+
+  const modalContent = (
+    <>
       <Modal
         animationType="fade"
         transparent
@@ -342,6 +375,25 @@ const RegisterScreen = ({ navigation }) => {
           </View>
         </View>
       </Modal>
+    </>
+  );
+
+  if (Platform.OS === 'web') {
+    return (
+      <View style={styles.webContainer}>
+        {formContent}
+        {modalContent}
+      </View>
+    );
+  }
+
+  return (
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      {formContent}
+      {modalContent}
     </KeyboardAvoidingView>
   );
 };
@@ -419,7 +471,7 @@ const styles = StyleSheet.create({
   },
   eyeButton: {
     paddingHorizontal: 12,
-    justifycontent: 'center',
+    justifyContent: 'center',
     alignItems: 'center',
   },
   inputError: {
