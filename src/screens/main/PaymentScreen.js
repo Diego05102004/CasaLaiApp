@@ -10,7 +10,6 @@ import {
   Modal,
   TextInput,
   Image,
-  Platform,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,12 +17,13 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import COLORS from '../../constants/colors';
 import { API_BASE_URL, PAGOS_IMAGE_STORAGE_PATH, buildPaymentImageUrl } from '../../config/apiConfig';
 import { InvocarMetodo } from '../../utils/comunicadorApi';
+import { BANCOS_VENEZUELA, limpiarCampoPago, validarFormularioPago, parsearNumeroFormateado } from '../../validation/pagoValidation';
+import { formatPhoneNumber } from '../../validation/profileValidation';
 
 const PAYMENT_METHOD_ORDER = ['Pago Movil', 'Transferencia', 'Zelle'];
 
 const formatCurrency = (value) => {
   const numericValue = Number(value || 0);
-
   return new Intl.NumberFormat('es-VE', {
     style: 'currency',
     currency: 'VES',
@@ -35,7 +35,6 @@ const normalizeAccounts = (payload) => {
   if (!payload) return [];
 
   let rawList = [];
-
   if (Array.isArray(payload)) rawList = payload;
   else if (Array.isArray(payload?.data)) rawList = payload.data;
   else if (Array.isArray(payload?.data?.cuentas)) rawList = payload.data.cuentas;
@@ -66,7 +65,6 @@ const normalizeAccounts = (payload) => {
 
 const buildMethodMap = (accounts) => {
   const grouped = {};
-
   PAYMENT_METHOD_ORDER.forEach((method) => {
     grouped[method] = [];
   });
@@ -77,14 +75,9 @@ const buildMethodMap = (accounts) => {
       : ['Transferencia'];
 
     methods.forEach((method) => {
-      if (!PAYMENT_METHOD_ORDER.includes(method)) {
-        return;
+      if (PAYMENT_METHOD_ORDER.includes(method)) {
+        grouped[method].push(account);
       }
-
-      if (!grouped[method]) {
-        grouped[method] = [];
-      }
-      grouped[method].push(account);
     });
   });
 
@@ -98,26 +91,26 @@ const getPaymentFormFields = (method, cuenta, total) => {
     case 'Pago Movil':
       return [
         { key: 'referencia', label: 'Referencia', placeholder: 'Ej. 123456', keyboardType: 'number-pad', maxLength: 20 },
-        { key: 'telefono', label: 'Teléfono del pagador', placeholder: cuenta?.telefono_cuenta || '0412-1234567', keyboardType: 'phone-pad' },
+        { key: 'telefono', label: 'Teléfono del remitente', placeholder: 'Formato: 0400-000-0000', keyboardType: 'phone-pad', maxLength: 15 },
         { key: 'monto', label: 'Monto pagado', placeholder: String(baseAmount.toFixed(2)), keyboardType: 'decimal-pad' },
       ];
     case 'Transferencia':
       return [
-        { key: 'banco_origen', label: 'Banco de origen', placeholder: 'Ej. Banesco', keyboardType: 'default' },
-        { key: 'referencia', label: 'Referencia o número de operación', placeholder: 'Ej. 255487', keyboardType: 'default' },
+        { key: 'banco_origen', label: 'Banco de origen', placeholder: 'Ej. Banesco', keyboardType: 'default', maxLength: 50 },
+        { key: 'referencia', label: 'Referencia', placeholder: 'Ej. 123456', keyboardType: 'number-pad', maxLength: 30 },
         { key: 'monto', label: 'Monto transferido', placeholder: String(baseAmount.toFixed(2)), keyboardType: 'decimal-pad' },
       ];
     case 'Zelle':
       return [
-        { key: 'remitente', label: 'Nombre del remitente', placeholder: 'Ej. Ana García', keyboardType: 'default' },
-        { key: 'contacto', label: 'Correo o teléfono del remitente', placeholder: 'correo@ejemplo.com', keyboardType: 'default' },
-        { key: 'referencia', label: 'Referencia', placeholder: 'Ej. Z-4582', keyboardType: 'default' },
+        { key: 'remitente', label: 'Nombre del remitente', placeholder: 'Ej. Ana García', keyboardType: 'default', maxLength: 80 },
+        { key: 'referencia', label: 'Referencia', placeholder: 'Ej. 123456', keyboardType: 'number-pad', maxLength: 30 },
         { key: 'monto', label: 'Monto enviado', placeholder: String(baseAmount.toFixed(2)), keyboardType: 'decimal-pad' },
       ];
     default:
       return [];
   }
 };
+
 
 const PaymentScreen = () => {
   const navigation = useNavigation();
@@ -137,10 +130,11 @@ const PaymentScreen = () => {
     telefono: '',
     banco_origen: '',
     remitente: '',
-    contacto: '',
     comprobante: '',
     comprobanteName: '',
   });
+  const [validationErrors, setValidationErrors] = useState([]);
+  const [bankSelectorVisible, setBankSelectorVisible] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const methodGroups = useMemo(() => buildMethodMap(cuentas), [cuentas]);
@@ -161,8 +155,7 @@ const PaymentScreen = () => {
           setSelectedCuenta(data.find((cuenta) => cuenta.metodos.includes(firstMethod)) || data[0]);
         }
       } catch (error) {
-        console.error('[Payment] Error al cargar cuentas:', error);
-        Alert.alert('No se pudieron cargar las cuentas', error?.message || 'Intenta nuevamente.');
+        Alert.alert('Error', error?.message || 'No se pudieron cargar las cuentas bancarias.');
       } finally {
         setLoading(false);
       }
@@ -192,13 +185,13 @@ const PaymentScreen = () => {
     setPaymentForm({
       referencia: '',
       monto: defaultAmount,
-      telefono: selectedCuenta?.telefono_cuenta || '',
+      telefono: '',
       banco_origen: '',
       remitente: '',
-      contacto: '',
       comprobante: '',
       comprobanteName: '',
     });
+    setValidationErrors([]);
   };
 
   const navigateToPedidos = () => {
@@ -215,7 +208,7 @@ const PaymentScreen = () => {
 
   const handleConfirmPayment = () => {
     if (!selectedMethod || !selectedCuenta) {
-      Alert.alert('Seleccione un método y una cuenta');
+      Alert.alert('Atención', 'Seleccione un método de pago y una cuenta bancaria.');
       return;
     }
 
@@ -237,46 +230,31 @@ const PaymentScreen = () => {
         quality: 0.8,
       });
 
-      if (result.canceled) {
+      if (result.canceled || !result.assets?.[0]) {
         return;
       }
 
-      const asset = result.assets?.[0];
-      if (!asset) {
-        return;
-      }
-
+      const asset = result.assets[0];
       setPaymentForm((previous) => ({
         ...previous,
         comprobante: asset.uri,
         comprobanteName: asset.fileName || 'comprobante.jpg',
       }));
     } catch (error) {
-      Alert.alert('No se pudo adjuntar el comprobante', error?.message || 'Intenta nuevamente.');
+      Alert.alert('Error', error?.message || 'No se pudo adjuntar el comprobante.');
     }
   };
 
   const handleSubmitPaymentForm = async () => {
     if (!selectedMethod || !selectedCuenta) {
-      Alert.alert('Debe seleccionar un método de pago antes de enviar el comprobante.');
+      Alert.alert('Error', 'Debe seleccionar un método de pago y cuenta.');
       return;
     }
 
-    const trimmedReference = (paymentForm.referencia || '').trim();
-    const trimmedMonto = (paymentForm.monto || '').trim();
-
-    if (!trimmedReference) {
-      Alert.alert('Falta la referencia', 'Debes indicar la referencia o número de operación del pago.');
-      return;
-    }
-
-    if (!trimmedMonto) {
-      Alert.alert('Falta el monto', 'Debes indicar el monto pagado.');
-      return;
-    }
-
-    if (!paymentForm.comprobante) {
-      Alert.alert('Falta el comprobante', 'Adjunta la imagen del comprobante para registrar el pago.');
+    // Ejecución de la validación exportada desde src/validation/pagoValidation.js
+    const erroresValidacion = validarFormularioPago(paymentForm, selectedMethod, pedido);
+    setValidationErrors(erroresValidacion);
+    if (erroresValidacion.length > 0) {
       return;
     }
 
@@ -284,15 +262,27 @@ const PaymentScreen = () => {
     const cuentaId = selectedCuenta?.id_cuenta ?? null;
 
     if (!facturaId || !cuentaId) {
-      Alert.alert('Datos incompletos', 'No se pudo identificar la factura o la cuenta para registrar el pago.');
+      Alert.alert('Datos incompletos', 'No se pudo identificar la factura o cuenta.');
       return;
     }
 
-    try {
-      setIsSubmitting(true);
+    setIsSubmitting(true);
 
+    const montoNum = parsearNumeroFormateado(paymentForm.monto);
+    const refClean = paymentForm.referencia.trim();
+
+    let detalleObservaciones = '';
+    if (selectedMethod === 'Pago Movil') {
+      detalleObservaciones = `Tel. Pagador: ${paymentForm.telefono.trim()}`;
+    } else if (selectedMethod === 'Transferencia') {
+      detalleObservaciones = `Banco Origen: ${paymentForm.banco_origen.trim()}`;
+    } else if (selectedMethod === 'Zelle') {
+      detalleObservaciones = `Remitente: ${paymentForm.remitente.trim()}`;
+    }
+
+    try {
       const fileUri = paymentForm.comprobante;
-      const originalFileName = paymentForm.comprobanteName || fileUri.split('/').pop() || 'comprobante.jpg';
+      const originalFileName = paymentForm.comprobanteName || fileUri?.split('/').pop() || 'comprobante.jpg';
       const cleanFileName = originalFileName.replace(/\\/g, '/').split('/').pop() || 'comprobante.jpg';
       const extensionFromName = cleanFileName.includes('.') ? cleanFileName.split('.').pop().toLowerCase() : 'jpg';
       const safeBaseName = cleanFileName
@@ -319,10 +309,10 @@ const PaymentScreen = () => {
       formData.append('factura', String(facturaId));
       formData.append('cuenta', String(cuentaId));
       formData.append('tipo', String(selectedMethod));
-      formData.append('monto', String(Number(trimmedMonto)));
-      formData.append('referencia', trimmedReference);
+      formData.append('monto', String(montoNum));
+      formData.append('referencia', refClean);
       formData.append('fecha', new Date().toISOString().slice(0, 10));
-      formData.append('observaciones', '');
+      formData.append('observaciones', detalleObservaciones);
       formData.append('ruta_comprobante', normalizedStoragePath);
       formData.append('comprobante', imageBlob, uploadFileName);
 
@@ -336,35 +326,28 @@ const PaymentScreen = () => {
 
       const contentType = response.headers.get('content-type') || '';
       const result = contentType.includes('application/json') ? await response.json() : await response.text();
-      const responseData = result?.data?.data || result?.data || result;
+      const nestedData = result && typeof result === 'object' && result.data ? result.data : result;
 
-      if (!response.ok || responseData?.status === 'error' || result?.status === 'error') {
-        throw new Error(
-          responseData?.message || result?.message || 'La API rechazó el registro del pago.'
+      const successStatus =
+        response?.ok && (
+          result?.status === 'success' ||
+          nestedData?.status === 'success' ||
+          result?.success === true ||
+          nestedData?.success === true ||
+          !!(nestedData?.pago_id || nestedData?.factura_id)
         );
-      }
 
-      const savedImagePath =
-        responseData?.ruta_comprobante ||
-        responseData?.comprobante ||
-        responseData?.path ||
-        responseData?.ruta ||
-        null;
-
-      if (savedImagePath) {
-        console.log('[Payment] comprobante guardado en:', savedImagePath);
+      if (!successStatus) {
+        throw new Error(result?.message || nestedData?.message || 'Error al procesar el pago.');
       }
 
       setShowPaymentForm(false);
-      const successText = responseData?.message || result?.message || 'El pago fue registrado de forma exitosa, solo debe esperar a que sea verificado por el administrador.';
-      setPaymentSuccessMessage(successText === 'Operación exitosa' ? 'El pago fue registrado de forma exitosa, solo debe esperar a que sea verificado por el administrador.' : successText);
+      const msgExito = result?.message || nestedData?.message || 'El pago fue registrado de forma exitosa, solo debe esperar a que sea verificado por el administrador.';
+      setPaymentSuccessMessage(msgExito === 'Operación exitosa' ? 'El pago fue registrado de forma exitosa, solo debe esperar a que sea verificado por el administrador.' : msgExito);
       setPaymentSuccessVisible(true);
     } catch (error) {
       console.error('[Payment] Error registrando pago:', error);
-      Alert.alert(
-        'No se pudo registrar el pago',
-        error?.message || 'Revisa la referencia, el monto o la información del comprobante e intenta de nuevo.'
-      );
+      Alert.alert('No se pudo registrar el pago', error?.message || 'Verifique los datos e intente nuevamente.');
     } finally {
       setIsSubmitting(false);
     }
@@ -429,21 +412,10 @@ const PaymentScreen = () => {
                   <Text style={styles.accountName}>{cuenta.nombre_banco}</Text>
                 </View>
 
-                {cuenta.numero_cuenta ? (
-                  <Text style={styles.accountInfo}>Cuenta: {cuenta.numero_cuenta}</Text>
-                ) : null}
-
-                {cuenta.telefono_cuenta ? (
-                  <Text style={styles.accountInfo}>Teléfono: {cuenta.telefono_cuenta}</Text>
-                ) : null}
-
-                {cuenta.correo_cuenta ? (
-                  <Text style={styles.accountInfo}>Correo: {cuenta.correo_cuenta}</Text>
-                ) : null}
-
-                {cuenta.rif_cuenta ? (
-                  <Text style={styles.accountInfo}>RIF: {cuenta.rif_cuenta}</Text>
-                ) : null}
+                {cuenta.numero_cuenta ? <Text style={styles.accountInfo}>Cuenta: {cuenta.numero_cuenta}</Text> : null}
+                {cuenta.telefono_cuenta ? <Text style={styles.accountInfo}>Teléfono: {cuenta.telefono_cuenta}</Text> : null}
+                {cuenta.correo_cuenta ? <Text style={styles.accountInfo}>Correo: {cuenta.correo_cuenta}</Text> : null}
+                {cuenta.rif_cuenta ? <Text style={styles.accountInfo}>RIF: {cuenta.rif_cuenta}</Text> : null}
               </TouchableOpacity>
             ))}
           </View>
@@ -460,7 +432,7 @@ const PaymentScreen = () => {
             <Text style={styles.summaryText}>Monto a pagar: {formatCurrency(pedido?.total || pedido?.monto || 0)}</Text>
 
             <TouchableOpacity style={styles.confirmButton} onPress={handleConfirmPayment}>
-              <Text style={styles.confirmButtonText}>Confirmar pago</Text>
+              <Text style={styles.confirmButtonText}>Confirmar Pago</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -480,18 +452,64 @@ const PaymentScreen = () => {
               {paymentFormFields.map((field) => (
                 <View key={field.key} style={styles.formField}>
                   <Text style={styles.formLabel}>{field.label}</Text>
-                  <TextInput
-                    style={styles.formInput}
-                    value={paymentForm[field.key]}
-                    onChangeText={(value) => setPaymentForm((previous) => ({ ...previous, [field.key]: value }))}
-                    placeholder={field.placeholder}
-                    keyboardType={field.keyboardType || 'default'}
-                    maxLength={field.maxLength || 200}
-                  />
+                  {field.key === 'banco_origen' ? (
+                    <TouchableOpacity
+                      style={[styles.formInput, styles.selectInput, validationErrors.length > 0 && styles.formInputError]}
+                      onPress={() => setBankSelectorVisible(true)}
+                    >
+                      <Text style={paymentForm.banco_origen ? styles.selectValue : styles.selectPlaceholder}>
+                        {paymentForm.banco_origen || 'Seleccione un banco'}
+                      </Text>
+                      <Ionicons name="chevron-down" size={18} color={COLORS.textSecondary} />
+                    </TouchableOpacity>
+                  ) : (
+                    <TextInput
+                      style={[styles.formInput, validationErrors.length > 0 && styles.formInputError]}
+                      value={paymentForm[field.key]}
+                      onChangeText={(value) => {
+                        let filteredValue = limpiarCampoPago(field.key, value);
+
+                      if (field.key === 'telefono') {
+                        filteredValue = formatPhoneNumber(value);
+                      }
+
+                      if (field.key === 'monto') {
+                        const totalPedido = Number(pedido?.total || pedido?.monto || 0);
+                        const montoIngresado = parsearNumeroFormateado(filteredValue);
+
+                        if (montoIngresado > totalPedido) {
+                          const montoMaximo = Math.floor(totalPedido * 100) / 100;
+                          filteredValue = montoMaximo.toFixed(2);
+                        }
+                      }
+
+                      setPaymentForm((previous) => ({ ...previous, [field.key]: filteredValue }));
+                      setValidationErrors([]);
+                      }}
+                      placeholder={field.placeholder}
+                      keyboardType={field.keyboardType || 'default'}
+                      maxLength={field.maxLength || 200}
+                    />
+                  )}
                 </View>
               ))}
 
-              <TouchableOpacity style={styles.uploadButton} onPress={handlePickComprobante}>
+              {validationErrors.length > 0 ? (
+                <View style={styles.validationBox}>
+                  <Text style={styles.validationTitle}>Revisa los datos ingresados:</Text>
+                  {validationErrors.map((error, index) => (
+                    <Text key={`${error}-${index}`} style={styles.validationText}>{error}</Text>
+                  ))}
+                </View>
+              ) : null}
+
+              <TouchableOpacity
+                style={[styles.uploadButton, validationErrors.length > 0 && styles.uploadButtonError]}
+                onPress={() => {
+                  setValidationErrors([]);
+                  handlePickComprobante();
+                }}
+              >
                 <Ionicons name="image-outline" size={18} color={COLORS.primary} />
                 <Text style={styles.uploadButtonText}>
                   {paymentForm.comprobanteName ? paymentForm.comprobanteName : 'Adjuntar comprobante'}
@@ -503,8 +521,44 @@ const PaymentScreen = () => {
               ) : null}
 
               <TouchableOpacity style={styles.submitButton} onPress={handleSubmitPaymentForm} disabled={isSubmitting}>
-                <Text style={styles.submitButtonText}>{isSubmitting ? 'Enviando...' : 'Enviar pago'}</Text>
+                <Text style={styles.submitButtonText}>{isSubmitting ? 'Enviando...' : 'Enviar Pago'}</Text>
               </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={bankSelectorVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setBankSelectorVisible(false)}
+      >
+        <View style={styles.bankSelectorOverlay}>
+          <View style={styles.bankSelectorCard}>
+            <View style={styles.formHeader}>
+              <Text style={styles.formTitle}>Seleccione el banco de origen</Text>
+              <TouchableOpacity onPress={() => setBankSelectorVisible(false)}>
+                <Ionicons name="close" size={22} color={COLORS.text} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView contentContainerStyle={styles.bankList}>
+              {BANCOS_VENEZUELA.map((banco) => (
+                <TouchableOpacity
+                  key={banco}
+                  style={styles.bankOption}
+                  onPress={() => {
+                    setPaymentForm((previous) => ({ ...previous, banco_origen: banco }));
+                    setValidationErrors([]);
+                    setBankSelectorVisible(false);
+                  }}
+                >
+                  <Text style={styles.bankOptionText}>{banco}</Text>
+                  {paymentForm.banco_origen === banco ? (
+                    <Ionicons name="checkmark" size={20} color={COLORS.primary} />
+                  ) : null}
+                </TouchableOpacity>
+              ))}
             </ScrollView>
           </View>
         </View>
@@ -768,6 +822,73 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: 14,
   },
+  formInputError: {
+    borderColor: '#DC2626',
+  },
+  selectInput: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  selectValue: {
+    color: COLORS.text,
+    fontSize: 14,
+    flex: 1,
+  },
+  selectPlaceholder: {
+    color: '#9CA3AF',
+    fontSize: 14,
+    flex: 1,
+  },
+  validationBox: {
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    borderRadius: 10,
+    backgroundColor: '#FEF2F2',
+    padding: 12,
+    marginBottom: 14,
+  },
+  validationTitle: {
+    color: '#991B1B',
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  validationText: {
+    color: '#B91C1C',
+    fontSize: 13,
+    lineHeight: 20,
+  },
+  bankSelectorOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  bankSelectorCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    maxHeight: '85%',
+    overflow: 'hidden',
+  },
+  bankList: {
+    paddingHorizontal: 18,
+    paddingBottom: 12,
+  },
+  bankOption: {
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+    paddingVertical: 10,
+  },
+  bankOptionText: {
+    color: COLORS.text,
+    fontSize: 14,
+    flex: 1,
+    paddingRight: 12,
+  },
   uploadButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -778,6 +899,9 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     marginBottom: 14,
     backgroundColor: '#EEF4FF',
+  },
+  uploadButtonError: {
+    borderColor: '#DC2626',
   },
   uploadButtonText: {
     marginLeft: 8,
