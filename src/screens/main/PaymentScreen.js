@@ -16,6 +16,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import COLORS from '../../constants/colors';
+import { API_BASE_URL, PAGOS_IMAGE_STORAGE_PATH, buildPaymentImageUrl } from '../../config/apiConfig';
 import { InvocarMetodo } from '../../utils/comunicadorApi';
 
 const PAYMENT_METHOD_ORDER = ['Pago Movil', 'Transferencia', 'Zelle'];
@@ -287,48 +288,85 @@ const PaymentScreen = () => {
       return;
     }
 
-    setIsSubmitting(true);
-
-    const payload = {
-      funcion: 'pago_ingresar',
-      factura: Number(facturaId),
-      cuenta: Number(cuentaId),
-      tipo: selectedMethod,
-      monto: Number(trimmedMonto),
-      referencia: trimmedReference,
-      comprobante: paymentForm.comprobanteName || paymentForm.comprobante,
-      fecha: new Date().toISOString().slice(0, 10),
-      observaciones: '',
-    };
-
-    console.log('[Payment] Registrando pago en backend:', payload);
-
     try {
-      const response = await InvocarMetodo('pagos.php', 'pago_ingresar', payload);
-      const nestedData = response && typeof response === 'object' && response.data && typeof response.data === 'object' ? response.data : response;
-      const successStatus =
-        response?.status === 'success' ||
-        nestedData?.status === 'success' ||
-        response?.success === true ||
-        nestedData?.success === true ||
-        !!(nestedData?.pago_id || nestedData?.factura_id || nestedData?.id_detalles);
+      setIsSubmitting(true);
 
-      if (!successStatus) {
-        throw new Error(response?.message || nestedData?.message || 'La API rechazó el registro del pago.');
+      const fileUri = paymentForm.comprobante;
+      const originalFileName = paymentForm.comprobanteName || fileUri.split('/').pop() || 'comprobante.jpg';
+      const cleanFileName = originalFileName.replace(/\\/g, '/').split('/').pop() || 'comprobante.jpg';
+      const extensionFromName = cleanFileName.includes('.') ? cleanFileName.split('.').pop().toLowerCase() : 'jpg';
+      const safeBaseName = cleanFileName
+        .replace(/\.[^/.]+$/, '')
+        .replace(/[^a-zA-Z0-9_-]/g, '_') || 'comprobante';
+      const uploadFileName = `${Date.now()}_${safeBaseName}.${extensionFromName || 'jpg'}`;
+
+      const fileResponse = await fetch(fileUri);
+      if (!fileResponse.ok) {
+        throw new Error('No se pudo leer el comprobante seleccionado.');
+      }
+
+      const imageBlob = await fileResponse.blob();
+      if (!imageBlob.size) {
+        throw new Error('El comprobante seleccionado está vacío.');
+      }
+
+      const normalizedStoragePath = (PAGOS_IMAGE_STORAGE_PATH || 'assets/img/uploads/comprobantes/')
+        .replace(/\\/g, '/')
+        .replace(/^\/+|\/+$/g, '');
+
+      const formData = new FormData();
+      formData.append('funcion', 'pago_ingresar');
+      formData.append('factura', String(facturaId));
+      formData.append('cuenta', String(cuentaId));
+      formData.append('tipo', String(selectedMethod));
+      formData.append('monto', String(Number(trimmedMonto)));
+      formData.append('referencia', trimmedReference);
+      formData.append('fecha', new Date().toISOString().slice(0, 10));
+      formData.append('observaciones', '');
+      formData.append('ruta_comprobante', normalizedStoragePath);
+      formData.append('comprobante', imageBlob, uploadFileName);
+
+      const response = await fetch(`${API_BASE_URL}/pagos.php`, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+        },
+        body: formData,
+      });
+
+      const contentType = response.headers.get('content-type') || '';
+      const result = contentType.includes('application/json') ? await response.json() : await response.text();
+      const responseData = result?.data?.data || result?.data || result;
+
+      if (!response.ok || responseData?.status === 'error' || result?.status === 'error') {
+        throw new Error(
+          responseData?.message || result?.message || 'La API rechazó el registro del pago.'
+        );
+      }
+
+      const savedImagePath =
+        responseData?.ruta_comprobante ||
+        responseData?.comprobante ||
+        responseData?.path ||
+        responseData?.ruta ||
+        null;
+
+      if (savedImagePath) {
+        console.log('[Payment] comprobante guardado en:', savedImagePath);
       }
 
       setShowPaymentForm(false);
-      setIsSubmitting(false);
-      const successText = response?.message || nestedData?.message || 'El pago fue registrado de forma exitosa, solo debe esperar a que sea verificado por el administrador.';
+      const successText = responseData?.message || result?.message || 'El pago fue registrado de forma exitosa, solo debe esperar a que sea verificado por el administrador.';
       setPaymentSuccessMessage(successText === 'Operación exitosa' ? 'El pago fue registrado de forma exitosa, solo debe esperar a que sea verificado por el administrador.' : successText);
       setPaymentSuccessVisible(true);
     } catch (error) {
       console.error('[Payment] Error registrando pago:', error);
-      setIsSubmitting(false);
       Alert.alert(
         'No se pudo registrar el pago',
         error?.message || 'Revisa la referencia, el monto o la información del comprobante e intenta de nuevo.'
       );
+    } finally {
+      setIsSubmitting(false);
     }
   };
 

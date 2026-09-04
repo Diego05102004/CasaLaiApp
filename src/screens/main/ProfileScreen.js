@@ -600,20 +600,7 @@ const ProfileScreen = () => {
                 {errorsPersonal.username ? <Text style={styles.errorText}>{errorsPersonal.username}</Text> : null}
               </View>
 
-              <View style={styles.inputBlock}>
-                <Text style={styles.infoLabel}>Contraseña Actual</Text>
-                <TextInput
-                  style={[styles.input, errorsPersonal.clave_actual && styles.inputError]}
-                  value={currentPasswordForProfile}
-                  onChangeText={(text) => {
-                    setCurrentPasswordForProfile(text);
-                    setErrorsPersonal((prev) => ({ ...prev, clave_actual: '' }));
-                  }}
-                  secureTextEntry
-                  placeholder="Confirma tu contraseña actual"
-                />
-                {errorsPersonal.clave_actual ? <Text style={styles.errorText}>{errorsPersonal.clave_actual}</Text> : null}
-              </View>
+
 
               <View style={styles.inputBlock}>
                 <Text style={styles.infoLabel}>Nombres</Text>
@@ -647,6 +634,20 @@ const ProfileScreen = () => {
                   placeholder="Formato: 0400-000-0000"
                 />
                 {errorsPersonal.phone ? <Text style={styles.errorText}>{errorsPersonal.phone}</Text> : null}
+              </View>
+                            <View style={styles.inputBlock}>
+                <Text style={styles.infoLabel}>Contraseña Actual</Text>
+                <TextInput
+                  style={[styles.input, errorsPersonal.clave_actual && styles.inputError]}
+                  value={currentPasswordForProfile}
+                  onChangeText={(text) => {
+                    setCurrentPasswordForProfile(text);
+                    setErrorsPersonal((prev) => ({ ...prev, clave_actual: '' }));
+                  }}
+                  secureTextEntry
+                  placeholder="Confirma tu contraseña actual"
+                />
+                {errorsPersonal.clave_actual ? <Text style={styles.errorText}>{errorsPersonal.clave_actual}</Text> : null}
               </View>
 
               <View style={styles.cardActions}>

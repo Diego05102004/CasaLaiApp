@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const DEFAULT_ISSUER = 'http://localhost/proyecto-casalai-ca/';
+const DEFAULT_ISSUER = 'http://localhost/Repositorio%20de%20GITHUB/proyecto-casalai-main/proyecto-casalai-ca/';
 const DEFAULT_AUDIENCE = 'proyecto-casalai-ca';
 // Cambia este valor para definir el tiempo de la sesion
 const SESSION_EXPIRATION_SECONDS = 6000;

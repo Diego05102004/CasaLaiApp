@@ -169,7 +169,7 @@ export const loginUser = createAsyncThunk(
         const token = pickFirstDefined(response.data?.token, response.token, '');
         const payload = response.data?.payload || (token ? decodeJwtPayload(token).payload : null);
 
-        const user = {
+        const baseUser = {
           id: pickFirstDefined(rawUser.id_usuario, rawUser.id, payload?.id_usuario, payload?.sub, null),
           email: pickFirstDefined(
             rawUser.correo,
@@ -227,23 +227,63 @@ export const loginUser = createAsyncThunk(
           token,
         };
 
-        console.log('[auth/login] datos reconstruidos desde login:', {
-          user,
+        let completeUser = { ...baseUser };
+        const userIdForProfile = pickFirstDefined(
+          baseUser.id,
+          rawUser.id_usuario,
+          rawUser.id,
+          payload?.id_usuario,
+          payload?.sub,
+          null
+        );
+
+        if (userIdForProfile) {
+          try {
+            const profileResponse = await InvocarMetodo('perfil.php', 'default', { id_usuario: userIdForProfile });
+            const profileData = profileResponse?.data?.usuario || profileResponse?.data?.user || profileResponse?.data || {};
+
+            if (profileData && Object.keys(profileData).length > 0) {
+              completeUser = {
+                ...completeUser,
+                id: profileData.id_usuario ?? completeUser.id,
+                id_usuario: profileData.id_usuario ?? userIdForProfile,
+                username: pickFirstDefined(profileData.username, profileData.nombre_usuario, completeUser.username, ''),
+                nombre_usuario: pickFirstDefined(profileData.username, profileData.nombre_usuario, completeUser.username, ''),
+                nombres: pickFirstDefined(profileData.nombres, profileData.nombre, completeUser.name, ''),
+                nombre: pickFirstDefined(profileData.nombres, profileData.nombre, completeUser.name, ''),
+                apellidos: pickFirstDefined(profileData.apellidos, profileData.apellido, '', ''),
+                apellido: pickFirstDefined(profileData.apellidos, profileData.apellido, '', ''),
+                telefono: pickFirstDefined(profileData.telefono, profileData.phone, completeUser.telefono, ''),
+                phone: pickFirstDefined(profileData.telefono, profileData.phone, completeUser.telefono, ''),
+                correo: pickFirstDefined(profileData.correo, profileData.email, completeUser.correo, ''),
+                email: pickFirstDefined(profileData.correo, profileData.email, completeUser.email, ''),
+                cedula: pickFirstDefined(profileData.cedula, profileData.cedula_usuario, completeUser.cedula, ''),
+                foto_perfil: pickFirstDefined(profileData.foto_perfil, profileData.avatar, completeUser.foto_perfil, null),
+                avatar: pickFirstDefined(profileData.foto_perfil, profileData.avatar, completeUser.foto_perfil, null),
+              };
+            }
+          } catch (profileError) {
+            console.warn('[auth/login] No se pudo cargar perfil después del login:', profileError?.message || profileError);
+          }
+        }
+
+        console.log('[auth/login] datos reconstruidos desde login y perfil:', {
+          user: completeUser,
           payload,
           rawUser,
         });
-        
+
         await persistAuthSession({
-          token: user.token,
-          user,
+          token: completeUser.token,
+          user: completeUser,
           payload,
         });
-        
+
         // Resetear intentos de login exitoso
         await resetLoginAttempts();
-        
+
         return {
-          user,
+          user: completeUser,
           isAuthenticated: true,
           apiResponse: response
         };
