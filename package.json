@@ -9,9 +9,16 @@
     "@reduxjs/toolkit": "^2.12.0",
     "@types/react": "~19.2.4",
     "@types/react-dom": "~19.2.3",
+<<<<<<< HEAD
     "expo": "^57.0.20",
     "expo-font": "~57.0.3",
     "expo-image-picker": "~57.0.16",
+=======
+    "expo": "^57.0.22",
+    "expo-font": "~57.0.4",
+    "expo-image-picker": "~57.0.17",
+    "expo-navigation-bar": "~57.0.2",
+>>>>>>> 0669489331e901c526853688fb804881b3ba123a
     "expo-status-bar": "~57.0.1",
     "react": "19.2.3",
     "react-dom": "19.2.3",
@@ -27,12 +34,15 @@
     "react-native-worklets-core": "^1.6.3",
     "react-redux": "^9.3.0",
     "redux": "^4.2.1",
-    "redux-persist": "*"
+    "redux-persist": "^6.0.0"
   },
   "name": "casa-lai",
   "version": "1.0.0",
   "scripts": {
     "android": "expo run:android",
     "ios": "expo run:ios"
+  },
+  "devDependencies": {
+    "@expo/ngrok": "^4.1.3"
   }
 }

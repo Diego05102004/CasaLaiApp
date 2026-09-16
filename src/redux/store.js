@@ -24,6 +24,7 @@ export const store = configureStore({
   reducer: persistedReducer,
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
+      immutableCheck: { warnAfter: 128 },
       serializableCheck: false,
     }),
 });

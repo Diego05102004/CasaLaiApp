@@ -8,6 +8,9 @@
     "icon": "./src/assets/images/LOGO.png",
     "scheme": "casalai",
     "userInterfaceStyle": "automatic",
+    "androidNavigationBar": {
+      "visible": "sticky-immersive"
+    },
     "splash": {
       "image": "./src/assets/images/LOGO.png",
       "resizeMode": "contain",
