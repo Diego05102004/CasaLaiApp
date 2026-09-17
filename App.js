@@ -1,9 +1,8 @@
 import 'react-native-gesture-handler';
 import React, { useEffect } from 'react';
-import { View, ActivityIndicator, Platform } from 'react-native';
+import { View, ActivityIndicator } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import * as NavigationBar from 'expo-navigation-bar';
 import { Provider, useDispatch, useSelector } from 'react-redux';
 import { PersistGate } from 'redux-persist/integration/react';
 import { NavigationContainer } from '@react-navigation/native';
@@ -39,16 +38,6 @@ const AppContent = () => {
 };
 
 const App = () => {
-  useEffect(() => {
-    if (Platform.OS !== 'android') {
-      return undefined;
-    }
-
-    NavigationBar.setVisibilityAsync('sticky-immersive');
-
-    return undefined;
-  }, []);
-
   return (
     <Provider store={store}>
       <PersistGate loading={null} persistor={persistor}>

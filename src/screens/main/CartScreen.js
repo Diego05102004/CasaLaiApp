@@ -163,7 +163,7 @@ const CartScreen = () => {
     try {
       setIsCreatingOrder(true);
 
-      const apiUrl = 'http://localhost/proyecto-casalai-ca/api/gestionarFactura.php';
+      const apiUrl = 'http://localhost/Repositorio%20de%20GITHUB/proyecto-casalai-main/proyecto-casalai-ca/api/gestionarFactura.php';
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {

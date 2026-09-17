@@ -1,26 +1,15 @@
 /**
  * Configuración de la API para la aplicación móvil
- *
+ * 
  * IMPORTANTE: Cuando subas el sistema al host, actualiza la URL base
  * con la URL real de tu servidor.
  */
 
-import { Platform } from 'react-native';
-
 // URL base de la API. Para un dispositivo físico usa la IP LAN del PC,
 // y para el emulador Android normalmente usa 10.0.2.2 en lugar de localhost.
-const CONFIGURED_API_URL = process.env.EXPO_PUBLIC_API_URL ||
-  'http://localhost/proyecto-casalai-ca/api';
-
-// En Android, localhost apunta al dispositivo y no al PC que ejecuta XAMPP.
-const ANDROID_API_HOST = process.env.EXPO_PUBLIC_ANDROID_API_HOST || '192.168.1.109';
-const ANDROID_API_URL = CONFIGURED_API_URL.replace(
-  /^(https?:\/\/)(localhost|127\.0\.0\.1)(?=[:/]|$)/i,
-  `$1${ANDROID_API_HOST}`
-);
-
 export const API_BASE_URL = (
-  Platform.OS === 'android' ? ANDROID_API_URL : CONFIGURED_API_URL
+  process.env.EXPO_PUBLIC_API_URL ||
+  'http://localhost/Repositorio%20de%20GITHUB/proyecto-casalai-main/proyecto-casalai-ca/api'
 ).replace(/\/+$/, '');
 
 const PROJECT_SERVER_ROOT = 'C:/xampp/htdocs/Repositorio de GITHUB/proyecto-casalai-main/proyecto-casalai-ca';
@@ -32,14 +21,14 @@ export const PROFILE_IMAGE_STORAGE_PATH = `${PROJECT_SERVER_ROOT}/assets/img/upl
 
 // URL pública para acceder a la imagen desde la app.
 // Esta URL sí se usa para leer la imagen desde el navegador o desde React Native.
-export const PROFILE_IMAGE_PUBLIC_URL = 'http://localhost/proyecto-casalai-ca/assets/img/uploads/';
+export const PROFILE_IMAGE_PUBLIC_URL = 'http://localhost/Repositorio%20de%20GITHUB/proyecto-casalai-main/proyecto-casalai-ca/assets/img/uploads/';
 
 // Ruta real del servidor donde PHP debe guardar la imagen del comprobante de pago.
 // IMPORTANTE: esto NO es una URL para el navegador; es una ruta del sistema de archivos.
 export const PAGOS_IMAGE_STORAGE_PATH = `${PROJECT_SERVER_ROOT}/assets/img/uploads/comprobantes/`;
 
 // URL pública para acceder a la imagen del comprobante desde la app.
-export const PAGOS_IMAGE_PUBLIC_URL = 'http://localhost/proyecto-casalai-ca/assets/img/uploads/comprobantes/';
+export const PAGOS_IMAGE_PUBLIC_URL = 'http://localhost/Repositorio%20de%20GITHUB/proyecto-casalai-main/proyecto-casalai-ca/assets/img/uploads/comprobantes/';
 
 // Normaliza una ruta de imagen para que funcione tanto con rutas relativas del servidor,
 // rutas absolutas del sistema de archivos, como con URLs completas ya resueltas.

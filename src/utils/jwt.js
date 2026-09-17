@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const DEFAULT_ISSUER = 'casalai-api';
-const DEFAULT_AUDIENCE = null;
+const DEFAULT_ISSUER = 'http://localhost/Repositorio%20de%20GITHUB/proyecto-casalai-main/proyecto-casalai-ca/';
+const DEFAULT_AUDIENCE = 'proyecto-casalai-ca';
 // Cambia este valor para definir el tiempo de la sesion
 const SESSION_EXPIRATION_SECONDS = 6000;
 // Cambia este valor para definir el tiempo de advertencia (en segundos)
@@ -33,7 +33,7 @@ const buildDebugInfo = (token, payload, reason, options = {}) => ({
   payload,
   reason,
   expectedIssuer: options.issuer || DEFAULT_ISSUER,
-  expectedAudience: options.audience ?? DEFAULT_AUDIENCE,
+  expectedAudience: options.audience || DEFAULT_AUDIENCE,
   receivedIssuer: payload?.iss || null,
   receivedAudience: payload?.aud || null,
   exp: payload?.exp || null,
@@ -123,7 +123,7 @@ export const getJwtStatus = (token, options = {}) => {
 
   const { payload, debug: decodeDebug } = decodeJwtPayload(token);
   const issuer = options.issuer || DEFAULT_ISSUER;
-  const audience = options.audience ?? DEFAULT_AUDIENCE;
+  const audience = options.audience || DEFAULT_AUDIENCE;
   const warningThreshold = options.warningThresholdSeconds ?? WARNING_THRESHOLD_SECONDS;
   const extensionSeconds = Number(options.extensionSeconds || 0);
 
@@ -152,7 +152,7 @@ export const getJwtStatus = (token, options = {}) => {
   const normalizedExpectedAudience = normalizeTokenValue(audience);
 
   const issuerMismatch = Boolean(payload.iss && normalizedIssuer && normalizedExpectedIssuer && normalizedIssuer !== normalizedExpectedIssuer);
-  const audienceMismatch = Boolean(normalizedExpectedAudience && normalizedAudience && normalizedAudience !== normalizedExpectedAudience);
+  const audienceMismatch = Boolean(payload.aud && normalizedAudience && normalizedExpectedAudience && normalizedAudience !== normalizedExpectedAudience);
 
   const debug = {
     ...decodeDebug,

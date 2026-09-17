@@ -14,12 +14,9 @@ let API_CONFIG = { ...IMPORTED_API_CONFIG };
  * @param {number} timeout - Tiempo en milisegundos
  * @returns {AbortSignal} - Signal para cancelar la petición
  */
-const createTimeoutSignal = (timeout, onTimeout) => {
+const createTimeoutSignal = (timeout) => {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => {
-    onTimeout?.();
-    controller.abort();
-  }, timeout);
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
   return { signal: controller.signal, timeoutId };
 };
 
@@ -83,9 +80,6 @@ export const secureGet = async (endpoint, params = {}, schema = null) => {
  * @returns {Promise} - Respuesta de la API
  */
 export const securePost = async (endpoint, data = {}, schema = null, requestTimeout = API_CONFIG.timeout) => {
-  let timeoutId;
-  let didTimeout = false;
-
   try {
     // Sanitizar datos
     const sanitizedData = prepareAPIData(data, schema);
@@ -98,10 +92,7 @@ export const securePost = async (endpoint, data = {}, schema = null, requestTime
       baseURL: API_CONFIG.baseURL
     });
 
-    const timeoutController = createTimeoutSignal(requestTimeout, () => {
-      didTimeout = true;
-    });
-    timeoutId = timeoutController.timeoutId;
+    const { signal, timeoutId } = createTimeoutSignal(requestTimeout);
     const response = await fetch(url, {
       method: 'POST',
       headers: {
@@ -110,7 +101,7 @@ export const securePost = async (endpoint, data = {}, schema = null, requestTime
         // 'Authorization': `Bearer ${token}`,
       },
       body: JSON.stringify(sanitizedData),
-      signal: timeoutController.signal,
+      signal,
     });
 
     clearTimeout(timeoutId);
@@ -123,11 +114,6 @@ export const securePost = async (endpoint, data = {}, schema = null, requestTime
 
     return await handleResponse(response);
   } catch (error) {
-    const wasCanceled = error.message?.toLowerCase().includes('request has been canceled');
-    if (error.name === 'AbortError' || (wasCanceled && didTimeout)) {
-      error = new Error(`La solicitud a ${endpoint} superó el tiempo límite de ${requestTimeout / 1000} segundos`);
-      error.name = 'TimeoutError';
-    }
     console.error('API POST Error:', error);
     console.error('Error details:', {
       name: error.name,
@@ -135,10 +121,6 @@ export const securePost = async (endpoint, data = {}, schema = null, requestTime
       stack: error.stack
     });
     throw handleAPIError(error);
-  } finally {
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-    }
   }
 };
 
@@ -289,13 +271,9 @@ const handleAPIError = (error) => {
     return new APIError('El registro tardó demasiado y la solicitud fue cancelada. Intenta nuevamente.', 408);
   }
   
-  if (
-    error.message?.includes('NetworkError') ||
-    error.message?.includes('Failed to fetch') ||
-    error.message?.toLowerCase().includes('request has been canceled')
-  ) {
+  if (error.message?.includes('NetworkError') || error.message?.includes('Failed to fetch')) {
     return new APIError(
-      'No se pudo conectar con la API. Comprueba que el teléfono esté en la misma Wi-Fi que el PC y que Windows Firewall permita Apache en el puerto 80.',
+      'No se pudo conectar con la API. Comprueba la URL, Apache/XAMPP y la configuración CORS.',
       0
     );
   }

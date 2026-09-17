@@ -7,11 +7,7 @@ const TestApiScreen = () => {
   const [respuesta, setRespuesta] = useState(null);
 
   // REEMPLAZA CON LA URL DE TU HOSTING REAL O DE LOCALTUNNEL
-<<<<<<< HEAD
-  const API_URL = 'https://eleven-moments-smell.loca.lt/Repositorio%20de%20GITHUB/proyecto-casalai-main/proyecto-casalai-ca/api/test_ping.php';
-=======
   const API_URL = 'https://fine-feet-wear.loca.lt/proyecto-casalai-ca/api/test_ping.php';
->>>>>>> 0669489331e901c526853688fb804881b3ba123a
 
   const enviarPeticionHTTPS = async () => {
     setLoading(true);

@@ -6,7 +6,7 @@
 import { secureGet, securePost, securePut, secureDelete, API_SCHEMAS } from './api';
 
 const OPERATIONS = {
-  login: { method: 'POST', schema: API_SCHEMAS.login, useFunctionParam: false, timeout: 60000 },
+  login: { method: 'POST', schema: API_SCHEMAS.login, useFunctionParam: false },
   registro: { method: 'POST', useFunctionParam: false },
   registrar_cliente: { method: 'POST', useFunctionParam: false, timeout: 120000 },
   pago_ingresar: { method: 'POST', useFunctionParam: false },
