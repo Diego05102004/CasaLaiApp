@@ -9,12 +9,14 @@ import {
   RefreshControl,
   Linking,
   Platform,
+  Alert,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSelector } from 'react-redux';
 import COLORS from '../../constants/colors';
 import { API_BASE_URL } from '../../config/apiConfig';
 import { InvocarMetodo } from '../../utils/comunicadorApi';
+import ConfirmModal from '../../components/common/ConfirmModal';
 
 const formatCurrency = (value) => {
   const numericValue = Number(value || 0);
@@ -166,14 +168,15 @@ const extractFacturasFromResponse = (payload) => {
   return [];
 };
 
-const PedidoCard = ({ pedido, onPress, onDownload }) => {
+const PedidoCard = ({ pedido, onPress, onDownload, onAnular }) => {
   const estado = String(pedido.estado || '').toLowerCase();
   const canDownload = isFacturaDescargable(pedido.estado);
+  const isBorrador = estado.includes('borrador');
 
   let actionLabel = 'Descargar';
   let actionStyle = styles.secondaryAction;
 
-  if (estado.includes('borrador')) {
+  if (isBorrador) {
     actionLabel = 'Pagar';
     actionStyle = styles.primaryAction;
   } else if (estado.includes('proceso')) {
@@ -216,10 +219,15 @@ const PedidoCard = ({ pedido, onPress, onDownload }) => {
         </View>
       </TouchableOpacity>
 
-      {estado.includes('borrador') && (
-        <TouchableOpacity style={[styles.actionButton, actionStyle]} onPress={() => onPress?.(pedido)}>
-          <Text style={styles.actionText}>{actionLabel}</Text>
-        </TouchableOpacity>
+      {isBorrador && (
+        <View style={styles.buttonRow}>
+          <TouchableOpacity style={[styles.actionButton, styles.dangerAction]} onPress={() => onAnular?.(pedido)}>
+            <Text style={styles.actionText}>Anular</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.actionButton, actionStyle]} onPress={() => onPress?.(pedido)}>
+            <Text style={styles.actionText}>{actionLabel}</Text>
+          </TouchableOpacity>
+        </View>
       )}
 
       {estado.includes('proceso') && !canDownload && (
@@ -243,6 +251,9 @@ const PedidosScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [pedidos, setPedidos] = useState([]);
   const [error, setError] = useState('');
+  const [anularModalVisible, setAnularModalVisible] = useState(false);
+  const [pedidoToAnular, setPedidoToAnular] = useState(null);
+  const [anulando, setAnulando] = useState(false);
 
   const { user, jwtPayload } = useSelector((state) => state.auth);
 
@@ -337,6 +348,74 @@ const PedidosScreen = () => {
     }
   };
 
+  const handleAnularPedido = (pedido) => {
+    setPedidoToAnular(pedido);
+    setAnularModalVisible(true);
+  };
+
+  const confirmarAnulacion = async () => {
+    if (!pedidoToAnular) return;
+
+    setAnulando(true);
+    setAnularModalVisible(false);
+
+    try {
+      const cedulaUsuario =
+        user?.cedula ||
+        user?.cedula_usuario ||
+        user?.documento ||
+        jwtPayload?.cedula ||
+        jwtPayload?.cedula_usuario ||
+        jwtPayload?.documento ||
+        '';
+
+      if (!cedulaUsuario) {
+        Alert.alert('Error', 'No se pudo identificar la cédula del usuario.');
+        return;
+      }
+
+      const idFactura = pedidoToAnular?.id_factura ?? pedidoToAnular?.id ?? pedidoToAnular?.numero;
+
+      if (!idFactura) {
+        Alert.alert('Error', 'No se pudo identificar el ID de la factura.');
+        return;
+      }
+
+      const response = await InvocarMetodo('gestionarFactura.php', 'facturaanular', {
+        id_factura: idFactura,
+        cedula: cedulaUsuario,
+      });
+
+      if (response?.status === 'success' || response?.factura_id) {
+        Alert.alert(
+          'Éxito',
+          response?.message || 'El pedido ha sido anulado exitosamente.',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                cargarPedidos();
+              },
+            },
+          ]
+        );
+      } else {
+        throw new Error(response?.message || 'No se pudo anular el pedido.');
+      }
+    } catch (error) {
+      console.error('[Pedidos] Error al anular pedido:', error);
+      Alert.alert('Error', error?.message || 'No se pudo anular el pedido. Por favor, intente nuevamente.');
+    } finally {
+      setAnulando(false);
+      setPedidoToAnular(null);
+    }
+  };
+
+  const cancelarAnulacion = () => {
+    setAnularModalVisible(false);
+    setPedidoToAnular(null);
+  };
+
   const renderGroup = ({ item }) => {
     const [groupKey, groupList] = item;
 
@@ -361,6 +440,7 @@ const PedidosScreen = () => {
               console.log('[Pedidos] Ver detalle del pedido:', pedidoSeleccionado);
             }}
             onDownload={handleDownloadFactura}
+            onAnular={handleAnularPedido}
           />
         ))}
       </View>
@@ -406,6 +486,16 @@ const PedidosScreen = () => {
             <Text style={styles.emptyText}>No tienes pedidos registrados.</Text>
           </View>
         }
+      />
+
+      <ConfirmModal
+        visible={anularModalVisible}
+        title="Anular Pedido"
+        message={`¿Estás seguro de que deseas anular el pedido #${pedidoToAnular?.numero || pedidoToAnular?.id_factura}? Esta acción no se puede deshacer.`}
+        onConfirm={confirmarAnulacion}
+        onCancel={cancelarAnulacion}
+        confirmText="Anular"
+        cancelText="Cancelar"
       />
     </View>
   );
@@ -513,11 +603,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  buttonRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 12,
+  },
   primaryAction: {
     backgroundColor: COLORS.primary,
+    flex: 1,
   },
   secondaryAction: {
     backgroundColor: '#407aef',
+  },
+  dangerAction: {
+    backgroundColor: COLORS.danger,
+    flex: 1,
   },
   warningAction: {
     backgroundColor: '#F5B700',

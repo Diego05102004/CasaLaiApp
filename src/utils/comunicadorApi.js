@@ -10,6 +10,7 @@ const OPERATIONS = {
   registro: { method: 'POST', useFunctionParam: false },
   registrar_cliente: { method: 'POST', useFunctionParam: false, timeout: 120000 },
   pago_ingresar: { method: 'POST', useFunctionParam: false },
+  facturaanular: { method: 'POST', useFunctionParam: true },
   default: { method: 'GET', schema: API_SCHEMAS.getProducts, useFunctionParam: true },
   por_id: { method: 'GET', schema: API_SCHEMAS.getProducts, useFunctionParam: true },
   por_categoria: { method: 'GET', schema: API_SCHEMAS.getProducts, useFunctionParam: true },

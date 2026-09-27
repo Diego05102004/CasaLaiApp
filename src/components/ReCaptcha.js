@@ -1,13 +1,24 @@
-import React, { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
-import { Platform, Text, View, StyleSheet } from 'react-native';
+import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import {
+  Platform,
+  Text,
+  View,
+  StyleSheet,
+  TouchableOpacity,
+  Modal,
+  ActivityIndicator,
+  TouchableWithoutFeedback,
+} from 'react-native';
 import { WebView } from 'react-native-webview';
 
 const RECAPTCHA_SITE_KEY = process.env.EXPO_PUBLIC_RECAPTCHA_SITE_KEY || '';
-// El origen debe coincidir con el dominio registrado para la clave de Google.
-// La API puede usar otra URL, por ejemplo una IP LAN en un dispositivo físico.
 const DOMAIN = process.env.EXPO_PUBLIC_RECAPTCHA_DOMAIN || 'http://localhost';
 
 const ReCaptcha = forwardRef(({ onVerify, onError }, ref) => {
+  const [modalVisible, setModalVisible] = useState(false);
+  const [verified, setVerified] = useState(false);
+  const [loading, setLoading] = useState(true);
+
   const webContainerRef = useRef(null);
   const webViewRef = useRef(null);
   const webWidgetIdRef = useRef(null);
@@ -21,6 +32,7 @@ const ReCaptcha = forwardRef(({ onVerify, onError }, ref) => {
 
   useImperativeHandle(ref, () => ({
     reset: () => {
+      setVerified(false);
       onVerifyRef.current(null);
       if (Platform.OS === 'web' && window.grecaptcha && webWidgetIdRef.current !== null) {
         window.grecaptcha.reset(webWidgetIdRef.current);
@@ -44,12 +56,18 @@ const ReCaptcha = forwardRef(({ onVerify, onError }, ref) => {
     const renderCaptcha = () => {
       if (!window.grecaptcha || !captchaElement.isConnected) return;
 
-      // El cuadro visible corresponde a reCAPTCHA v2 Checkbox.
       webWidgetIdRef.current = window.grecaptcha.render(captchaElement, {
         sitekey: RECAPTCHA_SITE_KEY,
-        callback: (token) => onVerifyRef.current(token),
-        'expired-callback': () => onVerifyRef.current(null),
+        callback: (token) => {
+          setVerified(true);
+          onVerifyRef.current(token);
+        },
+        'expired-callback': () => {
+          setVerified(false);
+          onVerifyRef.current(null);
+        },
         'error-callback': () => {
+          setVerified(false);
           onVerifyRef.current(null);
           onErrorRef.current?.();
         },
@@ -84,20 +102,20 @@ const ReCaptcha = forwardRef(({ onVerify, onError }, ref) => {
     );
   }
 
-  // En plataformas nativas, WebView muestra el mismo cuadro visible de reCAPTCHA v2.
   const htmlContent = `
     <!DOCTYPE html>
     <html>
       <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
         <script src="https://www.google.com/recaptcha/api.js" async defer></script>
         <style>
           body {
             display: flex;
             justify-content: center;
             align-items: center;
+            height: 100vh;
             margin: 0;
-            padding: 8px 0;
+            padding: 0;
             background-color: transparent;
           }
         </style>
@@ -129,8 +147,15 @@ const ReCaptcha = forwardRef(({ onVerify, onError }, ref) => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
       if (data.type === 'SUCCESS') {
+        setVerified(true);
         onVerify(data.token);
+        
+        // Pequeño retraso para que el usuario alcance a ver el check verde antes de cerrar
+        setTimeout(() => {
+          setModalVisible(false);
+        }, 400);
       } else if (data.type === 'EXPIRED' || data.type === 'ERROR') {
+        setVerified(false);
         onVerify(null);
         if (onError) onError();
       }
@@ -141,27 +166,82 @@ const ReCaptcha = forwardRef(({ onVerify, onError }, ref) => {
 
   return (
     <View style={styles.container}>
-      <WebView
-        ref={webViewRef}
-        originWhitelist={['*']}
-        source={{ html: htmlContent, baseUrl: DOMAIN }}
-        onMessage={handleMessage}
-        style={styles.webview}
-        scrollEnabled={false}
-        javaScriptEnabled={true}
-        domStorageEnabled={true}
-      />
+      {!RECAPTCHA_SITE_KEY ? (
+        <Text style={styles.configurationText}>
+          Configura EXPO_PUBLIC_RECAPTCHA_SITE_KEY para activar reCAPTCHA.
+        </Text>
+      ) : (
+        <>
+          <TouchableOpacity
+            style={[styles.checkboxButton, verified && styles.checkboxButtonVerified]}
+            onPress={() => {
+              setLoading(true); // Reinicia el loader cada vez que se abre
+              setModalVisible(true);
+            }}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.box, verified && styles.boxChecked]}>
+              {verified && <Text style={styles.checkmark}>✓</Text>}
+            </View>
+            <Text style={styles.checkboxText}>
+              {verified ? 'Verificación completada' : 'No soy un robot'}
+            </Text>
+          </TouchableOpacity>
+
+          <Modal
+            visible={modalVisible}
+            transparent={true}
+            animationType="fade"
+            onRequestClose={() => setModalVisible(false)}
+          >
+            {/* Contenedor exterior que detecta clics fuera del modal */}
+            <TouchableOpacity
+              style={styles.modalOverlay}
+              activeOpacity={1}
+              onPress={() => setModalVisible(false)}
+            >
+              {/* Contenedor interior para evitar que los clics dentro del contenido cierren el modal */}
+              <TouchableWithoutFeedback>
+                <View style={styles.modalContent}>
+                  {loading && (
+                    <ActivityIndicator
+                      size="large"
+                      color="#2196F3"
+                      style={styles.loader}
+                    />
+                  )}
+                  <WebView
+                    ref={webViewRef}
+                    originWhitelist={['*']}
+                    source={{ html: htmlContent, baseUrl: DOMAIN }}
+                    onMessage={handleMessage}
+                    onLoadEnd={() => setLoading(false)}
+                    style={styles.webview}
+                    scrollEnabled={false}
+                    javaScriptEnabled={true}
+                    domStorageEnabled={true}
+                  />
+                  <TouchableOpacity
+                    style={styles.closeButton}
+                    onPress={() => setModalVisible(false)}
+                  >
+                    <Text style={styles.closeButtonText}>Cancelar</Text>
+                  </TouchableOpacity>
+                </View>
+              </TouchableWithoutFeedback>
+            </TouchableOpacity>
+          </Modal>
+        </>
+      )}
     </View>
   );
 });
 
 const styles = StyleSheet.create({
   container: {
-    minHeight: 105,
     width: '100%',
     marginVertical: 12,
     alignItems: 'center',
-    justifyContent: 'center',
   },
   configurationText: {
     color: '#b91c1c',
@@ -172,10 +252,82 @@ const styles = StyleSheet.create({
     width: 334,
     alignSelf: 'center',
   },
-  webview: {
+  checkboxButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f9f9f9',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 8,
+    padding: 14,
+    width: '100%',
+  },
+  checkboxButtonVerified: {
+    borderColor: '#4CAF50',
+    backgroundColor: '#E8F5E9',
+  },
+  box: {
+    width: 22,
+    height: 22,
+    borderWidth: 2,
+    borderColor: '#9e9e9e',
+    borderRadius: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+    backgroundColor: '#ffffff',
+  },
+  boxChecked: {
+    borderColor: '#4CAF50',
+    backgroundColor: '#4CAF50',
+  },
+  checkmark: {
+    color: '#ffffff',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  checkboxText: {
+    color: '#333333',
+    fontSize: 15,
+    fontWeight: '500',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
     width: 340,
-    height: 105,
+    height: 520,
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 10,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  loader: {
+    position: 'absolute',
+    top: '45%',
+  },
+  webview: {
+    width: 320,
+    height: 440,
     backgroundColor: 'transparent',
+  },
+  closeButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  closeButtonText: {
+    color: '#d32f2f',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
 
