@@ -5,6 +5,7 @@
 
 import { sanitizeForAPI } from '../sanitization';
 import { API_CONFIG as IMPORTED_API_CONFIG } from '../config/apiConfig';
+import { encryption } from './encryption';
 
 // Configuración de la API (usando configuración centralizada)
 let API_CONFIG = { ...IMPORTED_API_CONFIG };
@@ -21,17 +22,74 @@ const createTimeoutSignal = (timeout) => {
 };
 
 /**
+ * Campos que deben encriptarse antes de enviar a la API
+ */
+const SENSITIVE_FIELDS = [
+  'password',
+  'email',
+  'correo',
+  'telefono',
+  'phone',
+  'direccion',
+  'address',
+  'nombre',
+  'nombres',
+  'name',
+  'apellido',
+  'apellidos',
+  'lastname',
+  'cedula',
+  'identificacion',
+  'dni',
+  'tarjeta',
+  'card',
+  'cvv',
+  'expiracion',
+  'expiry',
+  'username',
+];
+
+/**
+ * Determina qué campos de un objeto deben encriptarse
+ * @param {Object} data - Datos a analizar
+ * @returns {Array<string>} - Lista de campos a encriptar
+ */
+const getFieldsToEncrypt = (data) => {
+  if (!data || typeof data !== 'object') {
+    return [];
+  }
+
+  return Object.keys(data).filter(key => 
+    SENSITIVE_FIELDS.some(sensitiveField => 
+      key.toLowerCase().includes(sensitiveField.toLowerCase())
+    )
+  );
+};
+
+/**
  * Sanitiza y prepara los datos para enviar a la API
  * @param {Object} data - Datos a enviar
  * @param {Object} schema - Esquema de sanitización
- * @returns {Object} - Datos sanitizados
+ * @param {boolean} encryptSensitive - Si se deben encriptar campos sensibles
+ * @returns {Object} - Datos sanitizados y potencialmente encriptados
  */
-const prepareAPIData = (data, schema = null) => {
+const prepareAPIData = (data, schema = null, encryptSensitive = true) => {
   if (!data || typeof data !== 'object') {
     return {};
   }
 
-  return sanitizeForAPI(data, schema);
+  let sanitizedData = sanitizeForAPI(data, schema);
+
+  // Encriptar campos sensibles si se solicita
+  if (encryptSensitive) {
+    const fieldsToEncrypt = getFieldsToEncrypt(sanitizedData);
+    if (fieldsToEncrypt.length > 0) {
+      console.log('[API] Encriptando campos sensibles:', fieldsToEncrypt);
+      sanitizedData = encryption.encryptArray(sanitizedData, fieldsToEncrypt);
+    }
+  }
+
+  return sanitizedData;
 };
 
 /**
@@ -79,17 +137,18 @@ export const secureGet = async (endpoint, params = {}, schema = null) => {
  * @param {Object} schema - Esquema de sanitización
  * @returns {Promise} - Respuesta de la API
  */
-export const securePost = async (endpoint, data = {}, schema = null, requestTimeout = API_CONFIG.timeout) => {
+export const securePost = async (endpoint, data = {}, schema = null, requestTimeout = API_CONFIG.timeout, encryptSensitive = true) => {
   try {
-    // Sanitizar datos
-    const sanitizedData = prepareAPIData(data, schema);
+    // Sanitizar datos y encriptar campos sensibles
+    const sanitizedData = prepareAPIData(data, schema, encryptSensitive);
 
     const url = `${API_CONFIG.baseURL}${endpoint}`;
     console.log('API POST Request:', {
       url,
       endpoint,
       data: sanitizedData,
-      baseURL: API_CONFIG.baseURL
+      baseURL: API_CONFIG.baseURL,
+      encrypted: encryptSensitive
     });
 
     const { signal, timeoutId } = createTimeoutSignal(requestTimeout);
@@ -131,10 +190,10 @@ export const securePost = async (endpoint, data = {}, schema = null, requestTime
  * @param {Object} schema - Esquema de sanitización
  * @returns {Promise} - Respuesta de la API
  */
-export const securePut = async (endpoint, data = {}, schema = null) => {
+export const securePut = async (endpoint, data = {}, schema = null, encryptSensitive = true) => {
   try {
-    // Sanitizar datos
-    const sanitizedData = prepareAPIData(data, schema);
+    // Sanitizar datos y encriptar campos sensibles
+    const sanitizedData = prepareAPIData(data, schema, encryptSensitive);
 
     const { signal, timeoutId } = createTimeoutSignal(API_CONFIG.timeout);
     const response = await fetch(`${API_CONFIG.baseURL}${endpoint}`, {

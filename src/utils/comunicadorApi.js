@@ -6,22 +6,22 @@
 import { secureGet, securePost, securePut, secureDelete, API_SCHEMAS } from './api';
 
 const OPERATIONS = {
-  login: { method: 'POST', schema: API_SCHEMAS.login, useFunctionParam: false },
-  registro: { method: 'POST', useFunctionParam: false },
-  registrar_cliente: { method: 'POST', useFunctionParam: false, timeout: 120000 },
-  pago_ingresar: { method: 'POST', useFunctionParam: false },
-  facturaanular: { method: 'POST', useFunctionParam: true },
-  default: { method: 'GET', schema: API_SCHEMAS.getProducts, useFunctionParam: true },
-  por_id: { method: 'GET', schema: API_SCHEMAS.getProducts, useFunctionParam: true },
-  por_categoria: { method: 'GET', schema: API_SCHEMAS.getProducts, useFunctionParam: true },
-  detallado: { method: 'GET', schema: API_SCHEMAS.getProducts, useFunctionParam: true },
-  editar_personal: { method: 'POST', useFunctionParam: false },
-  editar_correo: { method: 'POST', useFunctionParam: false },
-  cambiar_correo: { method: 'POST', useFunctionParam: false },
-  editar_email: { method: 'POST', useFunctionParam: false },
-  cambiar_email: { method: 'POST', useFunctionParam: false },
-  cambiar_password: { method: 'POST', useFunctionParam: false },
-  cambiar_avatar: { method: 'POST', useFunctionParam: false },
+  login: { method: 'POST', schema: API_SCHEMAS.login, useFunctionParam: false, encryptSensitive: true },
+  registro: { method: 'POST', useFunctionParam: false, encryptSensitive: true },
+  registrar_cliente: { method: 'POST', useFunctionParam: false, timeout: 120000, encryptSensitive: true },
+  pago_ingresar: { method: 'POST', useFunctionParam: false, encryptSensitive: true },
+  facturaanular: { method: 'POST', useFunctionParam: true, encryptSensitive: false },
+  default: { method: 'GET', schema: API_SCHEMAS.getProducts, useFunctionParam: true, encryptSensitive: false },
+  por_id: { method: 'GET', schema: API_SCHEMAS.getProducts, useFunctionParam: true, encryptSensitive: false },
+  por_categoria: { method: 'GET', schema: API_SCHEMAS.getProducts, useFunctionParam: true, encryptSensitive: false },
+  detallado: { method: 'GET', schema: API_SCHEMAS.getProducts, useFunctionParam: true, encryptSensitive: false },
+  editar_personal: { method: 'POST', useFunctionParam: false, encryptSensitive: true },
+  editar_correo: { method: 'POST', useFunctionParam: false, encryptSensitive: true },
+  cambiar_correo: { method: 'POST', useFunctionParam: false, encryptSensitive: true },
+  editar_email: { method: 'POST', useFunctionParam: false, encryptSensitive: true },
+  cambiar_email: { method: 'POST', useFunctionParam: false, encryptSensitive: true },
+  cambiar_password: { method: 'POST', useFunctionParam: false, encryptSensitive: true },
+  cambiar_avatar: { method: 'POST', useFunctionParam: false, encryptSensitive: false },
 };
 
 const normalizeApiFile = (apiFile) => {
@@ -74,9 +74,9 @@ class ComunicadorAPI {
 
       switch (operation.method) {
         case 'POST':
-          return securePost(endpoint, requestData, operation.schema, operation.timeout);
+          return securePost(endpoint, requestData, operation.schema, operation.timeout, operation.encryptSensitive);
         case 'PUT':
-          return securePut(endpoint, requestData, operation.schema);
+          return securePut(endpoint, requestData, operation.schema, operation.encryptSensitive);
         case 'DELETE':
           return secureDelete(endpoint, requestData, operation.schema);
         case 'GET':
