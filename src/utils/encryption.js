@@ -138,12 +138,8 @@ class Encryption {
 
       // 5. Cifrar clave AES con RSA (clave pública)
       const publicKey = this.parsePemKey(this.rsaPublicKey, false);
-      const encryptedAesKey = publicKey.encrypt(aesKey, 'RSA-OAEP', {
-        md: forge.md.sha256.create(),
-        mgf1: {
-          md: forge.md.sha256.create()
-        }
-      });
+      // Usar PKCS1 v1.5 padding para máxima compatibilidad con OpenSSL nativo
+      const encryptedAesKey = publicKey.encrypt(aesKey, 'RSAES-PKCS1-V1_5');
       console.log('[ENCRYPTION] Clave AES cifrada con RSA:', encryptedAesKey.length, 'bytes');
 
       // 6. Combinar: longitud clave AES cifrada (4 bytes) + clave AES cifrada + IV + datos cifrados
@@ -231,12 +227,8 @@ class Encryption {
 
       // 4. Descifrar clave AES con RSA (clave privada)
       const privateKey = this.parsePemKey(this.rsaPrivateKey, true);
-      const aesKey = privateKey.decrypt(encryptedAesKey, 'RSA-OAEP', {
-        md: forge.md.sha256.create(),
-        mgf1: {
-          md: forge.md.sha256.create()
-        }
-      });
+      // Usar PKCS1 v1.5 padding para máxima compatibilidad con OpenSSL nativo
+      const aesKey = privateKey.decrypt(encryptedAesKey, 'RSAES-PKCS1-V1_5');
       console.log('[ENCRYPTION] Clave AES descifrada:', aesKey.length, 'bytes');
 
       // 5. Extraer IV (16 bytes) y datos cifrados

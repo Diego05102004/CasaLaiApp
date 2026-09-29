@@ -79,13 +79,16 @@ const prepareAPIData = (data, schema = null, encryptSensitive = true) => {
   }
 
   let sanitizedData = sanitizeForAPI(data, schema);
+  console.log('[API] Datos antes de cifrado:', JSON.stringify(sanitizedData));
 
   // Encriptar campos sensibles si se solicita
   if (encryptSensitive) {
     const fieldsToEncrypt = getFieldsToEncrypt(sanitizedData);
+    console.log('[API] Campos a cifrar:', fieldsToEncrypt);
     if (fieldsToEncrypt.length > 0) {
       console.log('[API] Encriptando campos sensibles:', fieldsToEncrypt);
       sanitizedData = encryption.encryptArray(sanitizedData, fieldsToEncrypt);
+      console.log('[API] Datos después de cifrado:', JSON.stringify(sanitizedData));
     }
   }
 
