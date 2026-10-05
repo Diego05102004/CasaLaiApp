@@ -7,12 +7,18 @@ export const useCart = () => {
   const total = useSelector(state => state.cart?.total || 0);
 
   const addItem = (product, quantity = 1) => {
-    dispatch(addToCart({ 
-      ...product, 
-      quantity,
-      // Asegurarse de que el precio sea un número
-      price: typeof product.price === 'string' ? parseFloat(product.price) : product.price
-    }));
+    try {
+      dispatch(addToCart({ 
+        ...product, 
+        quantity,
+        // Asegurarse de que el precio sea un número
+        price: typeof product.price === 'string' ? parseFloat(product.price) : product.price,
+        stock: product?.stock || product?.existencia,
+        existencia: product?.existencia || product?.stock,
+      }));
+    } catch (error) {
+      throw error;
+    }
   };
 
   const removeItem = (productId) => {

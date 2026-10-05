@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, Image, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { useDispatch } from 'react-redux';
 import { addToCart } from '../redux/slices/cartSlice';
 import COLORS from '../constants/colors';
@@ -35,15 +35,21 @@ const ProductCard = ({ product, onPress, onAddToCart }) => {
     const imageToUse = product?.imageSource || 
                       (product?.image ? { uri: product.image } : require('../assets/images/producto-default.jpg'));
     
-    dispatch(addToCart({
-      id: product?.id || product?.id_producto,
-      name: productName,
-      price: productPrice,
-      image: imageToUse,
-      imageUrl: typeof product?.image === 'string' ? product.image : null,
-      isCombo,
-      comboProducts: product?.products || []
-    }));
+    try {
+      dispatch(addToCart({
+        id: product?.id || product?.id_producto,
+        name: productName,
+        price: productPrice,
+        image: imageToUse,
+        imageUrl: typeof product?.image === 'string' ? product.image : null,
+        isCombo,
+        comboProducts: product?.products || [],
+        stock: product?.stock || product?.existencia,
+        existencia: product?.existencia || product?.stock,
+      }));
+    } catch (error) {
+      Alert.alert('Stock insuficiente', error.message);
+    }
   };
 
   const imageSource = product?.imageSource || 

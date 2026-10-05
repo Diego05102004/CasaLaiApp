@@ -15,7 +15,7 @@ const OPERATIONS = {
   por_id: { method: 'GET', schema: API_SCHEMAS.getProducts, useFunctionParam: true, encryptSensitive: false },
   por_categoria: { method: 'GET', schema: API_SCHEMAS.getProducts, useFunctionParam: true, encryptSensitive: false },
   detallado: { method: 'GET', schema: API_SCHEMAS.getProducts, useFunctionParam: true, encryptSensitive: false },
-  editar_personal: { method: 'POST', useFunctionParam: false, encryptSensitive: true },
+  cambiar_personal: { method: 'POST', useFunctionParam: false, encryptSensitive: true },
   editar_correo: { method: 'POST', useFunctionParam: false, encryptSensitive: true },
   cambiar_correo: { method: 'POST', useFunctionParam: false, encryptSensitive: true },
   editar_email: { method: 'POST', useFunctionParam: false, encryptSensitive: true },

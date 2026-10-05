@@ -376,7 +376,7 @@ const ProfileScreen = () => {
 
     try {
       const payload = {
-        funcion: 'editar_personal',
+        funcion: 'cambiar_personal',
         id_usuario: Number(userId),
         username: username.trim(),
         nombres: name.trim(),
@@ -385,7 +385,7 @@ const ProfileScreen = () => {
         clave_actual: currentPasswordForProfile,
       };
 
-      const response = await InvocarMetodo('perfil.php', 'editar_personal', payload);
+      const response = await InvocarMetodo('perfil.php', 'cambiar_personal', payload);
       const result = response?.data ?? response;
       const isSuccess = response?.status === 'success' || result?.status === 'success' || response?.success === true;
 

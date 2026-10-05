@@ -8,6 +8,7 @@ import {
   Image,
   ScrollView,
   Dimensions,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import COLORS from '../constants/colors';
@@ -140,8 +141,14 @@ const ComboDetailModal = ({ visible, combo, onClose, onAddToCart }) => {
             <TouchableOpacity
               style={styles.addButton}
               onPress={() => {
-                if (onAddToCart) onAddToCart(combo);
-                onClose();
+                if (onAddToCart) {
+                  try {
+                    onAddToCart(combo);
+                    onClose();
+                  } catch (error) {
+                    Alert.alert('Stock insuficiente', error.message);
+                  }
+                }
               }}
             >
               <Ionicons name="cart-outline" size={20} color={COLORS.white || '#FFF'} style={{ marginRight: 8 }} />

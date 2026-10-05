@@ -9,7 +9,8 @@ import {
   Dimensions,
   TouchableOpacity,
   ActivityIndicator,
-  ImageBackground
+  ImageBackground,
+  Alert
 } from 'react-native';
 import COLORS from '../../constants/colors';
 import theme from '../../constants/theme';
@@ -195,6 +196,14 @@ const HomeScreen = ({ navigation }) => {
   const { searchQuery, setSearchQuery, searchResults, filterData } = useSearch();
   const { addItem } = useCart();
 
+  const handleAddToCart = (product) => {
+    try {
+      addItem(product, 1);
+    } catch (error) {
+      Alert.alert('Stock insuficiente', error.message);
+    }
+  };
+
   const [menuVisible, setMenuVisible] = useState(false);
   const [selectedCombo, setSelectedCombo] = useState(null);
   const [comboModalVisible, setComboModalVisible] = useState(false);
@@ -289,7 +298,7 @@ const HomeScreen = ({ navigation }) => {
                     items={filteredSections[category]}
                     onPressItem={handleProductPress}
                     onPressCombo={handleComboPress}
-                    onAddComboToCart={(combo) => addItem(combo, 1)}
+                    onAddComboToCart={handleAddToCart}
                   />
                 );
               })}

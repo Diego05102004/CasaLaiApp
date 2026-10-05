@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, Image, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { useDispatch } from 'react-redux';
 import { addToCart } from '../redux/slices/cartSlice';
 import COLORS from '../constants/colors';
@@ -24,15 +24,19 @@ const ComboCard = ({ combo, onPress, onAddToCart }) => {
     if (onAddToCart) {
       onAddToCart(combo);
     } else {
-      dispatch(addToCart({
-        id: combo?.id,
-        name,
-        price,
-        image: imageSource,
-        imageUrl: typeof combo?.image === 'string' ? combo.image : null,
-        isCombo: true,
-        comboProducts: items,
-      }));
+      try {
+        dispatch(addToCart({
+          id: combo?.id,
+          name,
+          price,
+          image: imageSource,
+          imageUrl: typeof combo?.image === 'string' ? combo.image : null,
+          isCombo: true,
+          comboProducts: items,
+        }));
+      } catch (error) {
+        Alert.alert('Stock insuficiente', error.message);
+      }
     }
   };
 

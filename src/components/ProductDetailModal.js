@@ -8,6 +8,7 @@ import {
   ScrollView,
   StyleSheet,
   Dimensions,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import COLORS from '../constants/colors';
@@ -37,12 +38,14 @@ const ProductDetailModal = ({
 }) => {
   const [quantity, setQuantity] = useState(1);
   const [detailProduct, setDetailProduct] = useState(null);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     if (!visible || !product) return undefined;
 
     setQuantity(1);
     setDetailProduct(null);
+    setError(null);
 
     const productId = product.id || product.id_producto;
     if (!productId) return undefined;
@@ -50,7 +53,15 @@ const ProductDetailModal = ({
     let isActive = true;
     InvocarMetodo('productos.php', 'detallado', { id: productId })
       .then((response) => {
-        if (!isActive || response?.status !== 'success') return;
+        if (!isActive) return;
+
+        if (response?.status !== 'success') {
+          if (isActive) {
+            setError('Error al detallar el producto/combo');
+            setDetailProduct(null);
+          }
+          return;
+        }
 
         const detailedData = response.data?.producto || response.data?.productos?.[0];
         const characteristics = response.data?.caracteristicas ?? detailedData?.caracteristicas;
@@ -60,10 +71,20 @@ const ProductDetailModal = ({
             ...detailedData,
             caracteristicas: characteristics,
           });
+        } else {
+          if (isActive) {
+            setError('Producto no encontrado');
+            setDetailProduct(null);
+          }
         }
       })
-      .catch(() => {
-        if (isActive) setDetailProduct(null);
+      .catch((err) => {
+        if (isActive) {
+          console.error('[ProductDetailModal] Error al cargar detalles:', err);
+          const errorMessage = err?.message || 'Error al detallar el producto/combo';
+          setError(errorMessage);
+          setDetailProduct(null);
+        }
       });
 
     return () => {
@@ -72,6 +93,28 @@ const ProductDetailModal = ({
   }, [visible, product]);
 
   if (!product) return null;
+
+  if (error) {
+    return (
+      <Modal
+        visible={visible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={onClose}
+      >
+        <View style={styles.overlay}>
+          <View style={styles.errorModalCard}>
+            <Ionicons name="alert-circle-outline" size={48} color={COLORS.danger || '#dc2626'} />
+            <Text style={styles.errorTitle}>Error al detallar el producto/combo</Text>
+            <Text style={styles.errorMessage}>{error}</Text>
+            <TouchableOpacity style={styles.errorButton} onPress={onClose}>
+              <Text style={styles.errorButtonText}>Cerrar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    );
+  }
 
   const displayedProduct = detailProduct || product;
 
@@ -96,9 +139,13 @@ const ProductDetailModal = ({
 
   const handleAddToCart = () => {
     if (onAddToCart) {
-      onAddToCart(product, quantity);
+      try {
+        onAddToCart(product, quantity);
+        onClose();
+      } catch (error) {
+        Alert.alert('Stock insuficiente', error.message);
+      }
     }
-    onClose();
   };
 
   // Resuelve correctamente tanto imágenes de URL como require() locales
@@ -556,6 +603,46 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.primary || '#2563eb',
     fontWeight: '600',
+  },
+  errorModalCard: {
+    width: '90%',
+    maxWidth: 400,
+    backgroundColor: COLORS.white || '#ffffff',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.text || '#0f172a',
+    marginTop: 12,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  errorMessage: {
+    fontSize: 14,
+    color: COLORS.textSecondary || '#64748b',
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  errorButton: {
+    backgroundColor: COLORS.primary || '#2563eb',
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+  },
+  errorButtonText: {
+    color: COLORS.white || '#ffffff',
+    fontWeight: '700',
+    fontSize: 15,
   },
 });
 

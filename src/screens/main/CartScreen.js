@@ -69,18 +69,26 @@ const CartScreen = () => {
   };
 
   const handleIncrement = (productId, currentQuantity) => {
-    dispatch(updateQuantity({ 
-      id: productId, 
-      quantity: currentQuantity + 1 
-    }));
+    try {
+      dispatch(updateQuantity({ 
+        id: productId, 
+        quantity: currentQuantity + 1 
+      }));
+    } catch (error) {
+      Alert.alert('Stock insuficiente', error.message);
+    }
   };
 
   const handleDecrement = (productId, currentQuantity) => {
     if (currentQuantity > 1) {
-      dispatch(updateQuantity({ 
-        id: productId, 
-        quantity: currentQuantity - 1 
-      }));
+      try {
+        dispatch(updateQuantity({ 
+          id: productId, 
+          quantity: currentQuantity - 1 
+        }));
+      } catch (error) {
+        Alert.alert('Stock insuficiente', error.message);
+      }
     } else {
       dispatch(removeFromCart(productId));
     }
@@ -89,7 +97,11 @@ const CartScreen = () => {
   const handleQuantityChange = (productId, newQuantity) => {
     const quantity = parseInt(newQuantity) || 1;
     if (quantity > 0) {
-      dispatch(updateQuantity({ id: productId, quantity }));
+      try {
+        dispatch(updateQuantity({ id: productId, quantity }));
+      } catch (error) {
+        Alert.alert('Stock insuficiente', error.message);
+      }
     }
   };
 
