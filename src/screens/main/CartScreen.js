@@ -7,6 +7,7 @@ import { removeFromCart, clearCart, updateQuantity } from '../../redux/slices/ca
 import COLORS from '../../constants/colors';
 import theme from '../../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
+import { encryption } from '../../utils/encryption';
 
 const getOrderProducts = (cartItems) => {
   const productsById = new Map();
@@ -145,8 +146,8 @@ const CartScreen = () => {
 
     const formData = new URLSearchParams();
     formData.append('funcion', 'facturaIngresarMovil');
-    formData.append('cliente', cedulaUsuario);
-    formData.append('cedula', cedulaUsuario);
+    formData.append('cliente', encryption.encrypt(cedulaUsuario));
+    formData.append('cedula', encryption.encrypt(cedulaUsuario));
     formData.append('fecha', new Date().toISOString().slice(0, 10));
     formData.append('descuento', '0');
     formData.append('estatus', 'Borrador');

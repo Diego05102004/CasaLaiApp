@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,12 +11,24 @@ import {
   Platform,
   Alert,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import { useSelector } from 'react-redux';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useSelector, useDispatch } from 'react-redux';
 import COLORS from '../../constants/colors';
 import { API_BASE_URL } from '../../config/apiConfig';
 import { InvocarMetodo } from '../../utils/comunicadorApi';
 import ConfirmModal from '../../components/common/ConfirmModal';
+import { encryption } from '../../utils/encryption';
+import {
+  setPedidos,
+  setLoading,
+  setError,
+  clearPedidos,
+  forceUpdatePedidos,
+  selectPedidos,
+  selectPedidosLoading,
+  selectPedidosError,
+  selectLastFetch,
+} from '../../redux/slices/ordersSlice';
 
 const formatCurrency = (value) => {
   const numericValue = Number(value || 0);
@@ -77,6 +89,17 @@ const extractPedidosDesdeHtml = (html = '') => {
   while ((match = regex.exec(html)) !== null) {
     const [, idFactura, fecha, cliente, cedula, telefono, direccion, descuento, estatusSpan, estatusPlain, total] = match;
 
+    const clienteStripped = stripHtml(cliente).trim() || 'Cliente';
+    const cedulaStripped = stripHtml(cedula).trim() || '';
+    const telefonoStripped = stripHtml(telefono).trim() || '';
+    const direccionStripped = stripHtml(direccion).trim() || '';
+
+    // Desencriptar datos si están encriptados (texto largo > 50 caracteres es señal de encriptación)
+    const clienteDesencriptado = clienteStripped.length > 50 ? encryption.decrypt(clienteStripped) : clienteStripped;
+    const cedulaDesencriptada = cedulaStripped.length > 50 ? encryption.decrypt(cedulaStripped) : cedulaStripped;
+    const telefonoDesencriptado = telefonoStripped.length > 50 ? encryption.decrypt(telefonoStripped) : telefonoStripped;
+    const direccionDesencriptada = direccionStripped.length > 50 ? encryption.decrypt(direccionStripped) : direccionStripped;
+
     const pedido = {
       id_factura: Number(idFactura),
       numero_factura: `#${idFactura}`,
@@ -84,10 +107,10 @@ const extractPedidosDesdeHtml = (html = '') => {
       total: Number(String(total).replace('.', '').replace(',', '.').trim() || 0),
       estado: stripHtml(estatusSpan || estatusPlain || 'Borrador').trim() || 'Borrador',
       metodo: 'Sin método',
-      cliente: stripHtml(cliente).trim() || 'Cliente',
-      cedula: stripHtml(cedula).trim() || '',
-      telefono: stripHtml(telefono).trim() || '',
-      direccion: stripHtml(direccion).trim() || '',
+      cliente: clienteDesencriptado,
+      cedula: cedulaDesencriptada,
+      telefono: telefonoDesencriptado,
+      direccion: direccionDesencriptada,
       descuento: stripHtml(descuento).trim() || '0%',
     };
 
@@ -103,9 +126,42 @@ const normalizePedido = (item = {}) => {
   }
 
   const estado = item.estado ?? item.status ?? item.estatus ?? 'Borrador';
-  const cliente = item.cliente && typeof item.cliente === 'object'
-    ? item.cliente.nombre ?? 'Cliente'
-    : item.cliente ?? item.nombre_cliente ?? item.nombre ?? 'Cliente';
+
+  // Desencriptar datos del cliente (solo una vez)
+  let clienteNombre = 'Cliente';
+  let clienteDetalle = {};
+  let clienteDesencriptado = item.cliente;
+
+  // Si ya viene desencriptado de cargarPedidos, usarlo directamente
+  if (item.cliente_detalle && typeof item.cliente_detalle === 'object') {
+    // Verificar si ya está desencriptado (no es texto largo encriptado)
+    const nombre = item.cliente_detalle.nombre || '';
+    const cedula = item.cliente_detalle.cedula || '';
+    const telefono = item.cliente_detalle.telefono || '';
+    const direccion = item.cliente_detalle.direccion || '';
+
+    clienteDetalle = {
+      nombre: typeof nombre === 'string' && nombre.length > 50 ? encryption.decrypt(nombre) : nombre,
+      cedula: typeof cedula === 'string' && cedula.length > 50 ? encryption.decrypt(cedula) : cedula,
+      telefono: typeof telefono === 'string' && telefono.length > 50 ? encryption.decrypt(telefono) : telefono,
+      direccion: typeof direccion === 'string' && direccion.length > 50 ? encryption.decrypt(direccion) : direccion,
+    };
+
+    clienteNombre = clienteDetalle.nombre || 'Cliente';
+  } else if (item.cliente && typeof item.cliente === 'object') {
+    clienteNombre = encryption.decrypt(item.cliente.nombre ?? 'Cliente');
+  } else if (typeof item.cliente === 'string') {
+    if (item.cliente.length > 50) {
+      clienteNombre = encryption.decrypt(item.cliente);
+      clienteDesencriptado = clienteNombre;
+    } else {
+      clienteNombre = item.cliente;
+    }
+  } else if (item.nombre_cliente) {
+    clienteNombre = encryption.decrypt(item.nombre_cliente);
+  } else if (item.nombre) {
+    clienteNombre = encryption.decrypt(item.nombre);
+  }
 
   return {
     id: item.id_factura ?? item.id ?? item.numero_factura ?? `${Date.now()}-${Math.random()}`,
@@ -114,7 +170,9 @@ const normalizePedido = (item = {}) => {
     total: Number(item.total ?? item.monto_total ?? item.monto ?? 0),
     estado: String(estado),
     metodo: item.metodo_pago ?? item.forma_pago ?? item.metodo ?? 'Sin método',
-    cliente,
+    cliente: clienteNombre,
+    clienteDetalle,
+    clienteOriginal: clienteDesencriptado,
     items: Array.isArray(item.items) ? item.items : (Array.isArray(item.detalles) ? item.detalles : []),
     acciones: item.acciones ?? {
       pagar: String(estado).toLowerCase().includes('borrador'),
@@ -168,7 +226,7 @@ const extractFacturasFromResponse = (payload) => {
   return [];
 };
 
-const PedidoCard = ({ pedido, onPress, onDownload, onAnular }) => {
+const PedidoCard = React.memo(({ pedido, onPress, onDownload, onAnular }) => {
   const estado = String(pedido.estado || '').toLowerCase();
   const canDownload = isFacturaDescargable(pedido.estado);
   const isBorrador = estado.includes('borrador');
@@ -183,6 +241,11 @@ const PedidoCard = ({ pedido, onPress, onDownload, onAnular }) => {
     actionLabel = canDownload ? 'Descargar' : 'En revisión';
     actionStyle = canDownload ? styles.successAction : styles.warningAction;
   }
+
+  // Usar datos desencriptados de cliente_detalle si están disponibles
+  const clienteNombre = pedido.clienteDetalle?.nombre || pedido.cliente || 'Cliente';
+  const clienteCedula = pedido.clienteDetalle?.cedula || '';
+  const clienteTelefono = pedido.clienteDetalle?.telefono || '';
 
   return (
     <View style={styles.card}>
@@ -200,18 +263,29 @@ const PedidoCard = ({ pedido, onPress, onDownload, onAnular }) => {
 
         <View style={styles.metaRow}>
           <Text style={styles.metaLabel}>Cliente:</Text>
-          <Text style={styles.metaValue}>{pedido.cliente}</Text>
+          <Text style={styles.metaValue}>{clienteNombre}</Text>
         </View>
+
+        {clienteCedula && (
+          <View style={styles.metaRow}>
+            <Text style={styles.metaLabel}>Cédula:</Text>
+            <Text style={styles.metaValue}>{clienteCedula}</Text>
+          </View>
+        )}
+
+        {clienteTelefono && (
+          <View style={styles.metaRow}>
+            <Text style={styles.metaLabel}>Teléfono:</Text>
+            <Text style={styles.metaValue}>{clienteTelefono}</Text>
+          </View>
+        )}
 
         <View style={styles.metaRow}>
           <Text style={styles.metaLabel}>Fecha:</Text>
           <Text style={styles.metaValue}>{formatDate(pedido.fecha)}</Text>
         </View>
 
-        <View style={styles.metaRow}>
-          <Text style={styles.metaLabel}>Pago:</Text>
-          <Text style={styles.metaValue}>{pedido.metodo}</Text>
-        </View>
+
 
         <View style={styles.footerRow}>
           <Text style={styles.totalLabel}>Total</Text>
@@ -243,23 +317,31 @@ const PedidoCard = ({ pedido, onPress, onDownload, onAnular }) => {
       )}
     </View>
   );
-};
+});
 
 const PedidosScreen = () => {
   const navigation = useNavigation();
-  const [loading, setLoading] = useState(true);
+  const dispatch = useDispatch();
   const [refreshing, setRefreshing] = useState(false);
-  const [pedidos, setPedidos] = useState([]);
-  const [error, setError] = useState('');
   const [anularModalVisible, setAnularModalVisible] = useState(false);
   const [pedidoToAnular, setPedidoToAnular] = useState(null);
   const [anulando, setAnulando] = useState(false);
 
   const { user, jwtPayload } = useSelector((state) => state.auth);
+  const pedidos = useSelector(selectPedidos);
+  const loading = useSelector(selectPedidosLoading);
+  const error = useSelector(selectPedidosError);
+  const lastFetch = useSelector(selectLastFetch);
 
-  const cargarPedidos = async () => {
+  const pollingIntervalRef = useRef(null);
+  const isScreenFocusedRef = useRef(true);
+
+  const cargarPedidos = useCallback(async (force = false) => {
+    if (!isScreenFocusedRef.current) return;
+
     try {
-      setError('');
+      dispatch(setLoading(true));
+      dispatch(setError(null));
 
       const cedulaUsuario =
         user?.cedula ||
@@ -271,8 +353,8 @@ const PedidosScreen = () => {
         '';
 
       if (!cedulaUsuario) {
-        setPedidos([]);
-        setError('No se pudo identificar la cédula del usuario para consultar sus pedidos.');
+        dispatch(clearPedidos());
+        dispatch(setError('No se pudo identificar la cédula del usuario para consultar sus pedidos.'));
         return;
       }
 
@@ -288,29 +370,109 @@ const PedidosScreen = () => {
         const parsedHtmlPedidos = extractPedidosDesdeHtml(htmlFacturaList);
 
         if (parsedHtmlPedidos.length > 0) {
-          setPedidos(parsedHtmlPedidos.map(normalizePedido).filter(Boolean));
+          const normalized = parsedHtmlPedidos.map(normalizePedido).filter(Boolean);
+          if (force) {
+            dispatch(forceUpdatePedidos(normalized));
+          } else {
+            dispatch(setPedidos(normalized));
+          }
           return;
         }
       }
 
-      const normalized = sourceList
+      // Desencriptar datos de las facturas antes de normalizar (solo una vez)
+      const decryptedList = sourceList.map((factura) => {
+        if (!factura || typeof factura !== 'object') {
+          return factura;
+        }
+
+        const decryptedFactura = { ...factura };
+
+        // Desencriptar campo cliente si es string largo
+        if (typeof decryptedFactura.cliente === 'string' && decryptedFactura.cliente.length > 50) {
+          decryptedFactura.cliente = encryption.decrypt(decryptedFactura.cliente);
+        }
+
+        // Desencriptar cliente_detalle si existe
+        if (decryptedFactura.cliente_detalle && typeof decryptedFactura.cliente_detalle === 'object') {
+          decryptedFactura.cliente_detalle = {
+            ...decryptedFactura.cliente_detalle,
+            nombre: encryption.decrypt(decryptedFactura.cliente_detalle.nombre || ''),
+            cedula: encryption.decrypt(decryptedFactura.cliente_detalle.cedula || ''),
+            telefono: encryption.decrypt(decryptedFactura.cliente_detalle.telefono || ''),
+            direccion: encryption.decrypt(decryptedFactura.cliente_detalle.direccion || ''),
+          };
+        }
+
+        return decryptedFactura;
+      });
+
+      const normalized = decryptedList
         .map(normalizePedido)
         .filter(Boolean);
 
-      setPedidos(normalized);
+      if (force) {
+        dispatch(forceUpdatePedidos(normalized));
+      } else {
+        dispatch(setPedidos(normalized));
+      }
     } catch (err) {
       console.error('[Pedidos] Error al consultar facturas:', err);
-      setError(err?.message || 'No se pudieron cargar tus pedidos en este momento.');
-      setPedidos([]);
+      dispatch(setError(err?.message || 'No se pudieron cargar tus pedidos en este momento.'));
+      dispatch(clearPedidos());
     } finally {
-      setLoading(false);
+      dispatch(setLoading(false));
       setRefreshing(false);
     }
-  };
+  }, [user, jwtPayload, dispatch]);
 
+  // Configurar polling para actualización en tiempo real
+  const startPolling = useCallback(() => {
+    // Limpiar intervalo existente
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+    }
+
+    // Crear nuevo intervalo (30 segundos)
+    pollingIntervalRef.current = setInterval(() => {
+      if (isScreenFocusedRef.current) {
+        console.log('[Pedidos] Actualizando pedidos (polling)...');
+        cargarPedidos();
+      }
+    }, 30000); // 30 segundos
+  }, [cargarPedidos]);
+
+  const stopPolling = useCallback(() => {
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    }
+  }, []);
+
+  // Cargar pedidos al montar o cuando cambie el usuario
   useEffect(() => {
+    dispatch(setLoading(true));
     cargarPedidos();
-  }, [user, jwtPayload]);
+    startPolling();
+
+    return () => {
+      stopPolling();
+    };
+  }, [cargarPedidos, startPolling, stopPolling, dispatch]);
+
+  // Manejar foco de la pantalla
+  useFocusEffect(
+    useCallback(() => {
+      isScreenFocusedRef.current = true;
+      // Cargar pedidos cuando la pantalla gana foco
+      dispatch(setLoading(true));
+      cargarPedidos();
+
+      return () => {
+        isScreenFocusedRef.current = false;
+      };
+    }, [cargarPedidos, dispatch])
+  );
 
   const pedidosAgrupados = useMemo(() => {
     return pedidos.reduce((accumulator, item) => {
@@ -323,37 +485,12 @@ const PedidosScreen = () => {
     }, {});
   }, [pedidos]);
 
-  const handleDownloadFactura = async (pedidoSeleccionado) => {
-    try {
-      const idFactura = pedidoSeleccionado?.id_factura ?? pedidoSeleccionado?.id ?? pedidoSeleccionado?.numero;
-      if (!idFactura) {
-        console.warn('[Pedidos] No hay id de factura para descargar');
-        return;
-      }
-
-      const url = `${API_BASE_URL}/descargarFactura.php?id_factura=${encodeURIComponent(idFactura)}`;
-
-      if (Platform.OS === 'web') {
-        const link = document.createElement('a');
-        link.href = url;
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
-        link.click();
-        return;
-      }
-
-      await Linking.openURL(url);
-    } catch (error) {
-      console.error('[Pedidos] Error al descargar factura:', error);
-    }
-  };
-
-  const handleAnularPedido = (pedido) => {
+  const handleAnularPedido = useCallback((pedido) => {
     setPedidoToAnular(pedido);
     setAnularModalVisible(true);
-  };
+  }, []);
 
-  const confirmarAnulacion = async () => {
+  const confirmarAnulacion = useCallback(async () => {
     if (!pedidoToAnular) return;
 
     setAnulando(true);
@@ -394,7 +531,7 @@ const PedidosScreen = () => {
             {
               text: 'OK',
               onPress: () => {
-                cargarPedidos();
+                cargarPedidos(true); // Forzar actualización después de anular
               },
             },
           ]
@@ -409,14 +546,53 @@ const PedidosScreen = () => {
       setAnulando(false);
       setPedidoToAnular(null);
     }
-  };
+  }, [pedidoToAnular, user, jwtPayload, cargarPedidos]);
 
-  const cancelarAnulacion = () => {
+  const cancelarAnulacion = useCallback(() => {
     setAnularModalVisible(false);
     setPedidoToAnular(null);
-  };
+  }, []);
 
-  const renderGroup = ({ item }) => {
+  const handleDownloadFactura = useCallback(async (pedidoSeleccionado) => {
+    try {
+      const idFactura = pedidoSeleccionado?.id_factura ?? pedidoSeleccionado?.id ?? pedidoSeleccionado?.numero;
+      if (!idFactura) {
+        console.warn('[Pedidos] No hay id de factura para descargar');
+        return;
+      }
+
+      const url = `${API_BASE_URL}/descargarFactura.php?id_factura=${encodeURIComponent(idFactura)}`;
+
+      if (Platform.OS === 'web') {
+        const link = document.createElement('a');
+        link.href = url;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.click();
+        return;
+      }
+
+      await Linking.openURL(url);
+    } catch (error) {
+      console.error('[Pedidos] Error al descargar factura:', error);
+    }
+  }, []);
+
+  const handlePedidoPress = useCallback((pedidoSeleccionado) => {
+    if (String(pedidoSeleccionado.estado || '').toLowerCase().includes('borrador')) {
+      navigation.navigate('Payment', { pedido: pedidoSeleccionado });
+      return;
+    }
+
+    if (isFacturaDescargable(pedidoSeleccionado.estado)) {
+      handleDownloadFactura(pedidoSeleccionado);
+      return;
+    }
+
+    console.log('[Pedidos] Ver detalle del pedido:', pedidoSeleccionado);
+  }, [navigation, handleDownloadFactura]);
+
+  const renderGroup = useCallback(({ item }) => {
     const [groupKey, groupList] = item;
 
     return (
@@ -426,26 +602,14 @@ const PedidosScreen = () => {
           <PedidoCard
             key={pedido.id}
             pedido={pedido}
-            onPress={(pedidoSeleccionado) => {
-              if (String(pedidoSeleccionado.estado || '').toLowerCase().includes('borrador')) {
-                navigation.navigate('Payment', { pedido: pedidoSeleccionado });
-                return;
-              }
-
-              if (isFacturaDescargable(pedidoSeleccionado.estado)) {
-                handleDownloadFactura(pedidoSeleccionado);
-                return;
-              }
-
-              console.log('[Pedidos] Ver detalle del pedido:', pedidoSeleccionado);
-            }}
+            onPress={handlePedidoPress}
             onDownload={handleDownloadFactura}
             onAnular={handleAnularPedido}
           />
         ))}
       </View>
     );
-  };
+  }, [handlePedidoPress, handleDownloadFactura, handleAnularPedido]);
 
   if (loading) {
     return (
@@ -476,7 +640,7 @@ const PedidosScreen = () => {
             refreshing={refreshing}
             onRefresh={() => {
               setRefreshing(true);
-              cargarPedidos();
+              cargarPedidos(true); // Forzar actualización al hacer pull-to-refresh
             }}
           />
         }

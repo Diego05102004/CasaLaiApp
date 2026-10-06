@@ -239,7 +239,7 @@ export const loginUser = createAsyncThunk(
 
         if (userIdForProfile) {
           try {
-            const profileResponse = await ;
+            const profileResponse = await api.secureGet('/perfil.php', { id_usuario: userIdForProfile });
             const profileData = profileResponse?.data?.usuario || profileResponse?.data?.user || profileResponse?.data || {};
 
             if (profileData && Object.keys(profileData).length > 0) {

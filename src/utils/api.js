@@ -26,6 +26,12 @@ const createTimeoutSignal = (timeout) => {
  */
 const SENSITIVE_FIELDS = [
   'password',
+  'pass',
+  'contrasena',
+  'clave',
+  'currentpassword',
+  'newpassword',
+  'confirmpassword',
   'email',
   'correo',
   'telefono',

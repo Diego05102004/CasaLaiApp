@@ -313,7 +313,7 @@ const PaymentScreen = () => {
       formData.append('referencia', refClean);
       formData.append('fecha', new Date().toISOString().slice(0, 10));
       formData.append('observaciones', detalleObservaciones);
-      formData.append('ruta_comprobante', normalizedStoragePath);
+      // formData.append('ruta_comprobante', normalizedStoragePath);
       formData.append('comprobante', imageBlob, uploadFileName);
 
       const response = await fetch(`${API_BASE_URL}/pagos.php`, {
