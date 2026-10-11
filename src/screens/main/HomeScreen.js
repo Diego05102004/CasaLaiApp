@@ -1,16 +1,17 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
   Image,
-  ScrollView,
-  Dimensions,
+  TextInput,
   TouchableOpacity,
   ActivityIndicator,
   ImageBackground,
-  Alert
+  Alert,
+  Modal,
+  ScrollView,
 } from 'react-native';
 import COLORS from '../../constants/colors';
 import theme from '../../constants/theme';
@@ -20,201 +21,113 @@ import ComboDetailModal from '../../components/ComboDetailModal';
 import ProductDetailModal from '../../components/ProductDetailModal';
 import ScreenWithHeader from '../../components/common/ScreenWithHeader';
 import { useProducts } from '../../hooks/useProducts';
-import { useSearch } from '../../hooks/useSearch';
 import { useCart } from '../../hooks/useCart';
 import { IMAGES } from '../../config/images';
 import MenuModal from '../../components/common/MenuModal';
 import { Ionicons } from '@expo/vector-icons';
 
-const { width } = Dimensions.get('window');
+const normalizeFilterValue = (value) => String(value || '').trim().toLocaleLowerCase();
 
-const sectionTitles = {
-  featured: 'Ofertas Especiales',
-  impresoras: 'Impresoras',
-  tintas: 'Tintas',
-  cartuchos: 'Cartuchos de Tóner',
-  combos: 'Combos'
-};
+const getCategory = (product) => (
+  product?.category || product?.categoria_nombre || product?.categoria || 'Otros'
+);
 
-const FeaturedSlider = ({ items, onPressItem }) => {
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const flatListRef = useRef(null);
+const getBrand = (product) => (
+  product?.brand || product?.marca || product?.nombre_marca || product?.marca_nombre || ''
+);
 
-  useEffect(() => {
-    if (items.length <= 1) return;
-    
-    const interval = setInterval(() => {
-      const nextIndex = (currentIndex + 1) % items.length;
-      flatListRef.current?.scrollToIndex({
-        index: nextIndex,
-        animated: true,
-      });
-      setCurrentIndex(nextIndex);
-    }, 2000);
+const getProductName = (product) => (
+  product?.name || product?.nombre || product?.nombre_combo || 'Producto'
+);
 
-    return () => clearInterval(interval);
-  }, [currentIndex, items.length]);
-
-  const handleScroll = (event) => {
-    const newIndex = Math.round(event.nativeEvent.contentOffset.x / (width - 40));
-    if (newIndex !== currentIndex) {
-      setCurrentIndex(newIndex);
-    }
-  };
-
-  const getItemLayout = (_, index) => ({
-    length: width - 40,
-    offset: (width - 40) * index,
-    index,
-  });
-
-  const renderItem = ({ item }) => {
-    const imageSource = item.imageSource || 
-                       (item.image ? { uri: item.image } : require('../../assets/images/producto-default.jpg'));
-    const itemPrice = Number(item.price ?? item.precio ?? 0);
-    const origPrice = Number(item.originalPrice ?? itemPrice);
-
-    return (
-      <TouchableOpacity 
-        style={styles.slide}
-        activeOpacity={0.9}
-        onPress={() => onPressItem && onPressItem(item)}
-      >
-        <View style={styles.featuredCard}>
-          {origPrice > itemPrice && (
-            <View style={styles.discountBadge}>
-              <Text style={styles.discountText}>
-                {Math.round(((origPrice - itemPrice) / origPrice) * 100)}% OFF
-              </Text>
-            </View>
-          )}
-          <Image 
-            source={imageSource}
-            style={styles.featuredImage}
-            resizeMode="cover"
-            defaultSource={require('../../assets/images/producto-default.jpg')}
-          />
-          <View style={styles.featuredInfo}>
-            <Text style={styles.featuredName} numberOfLines={1}>{item.name || item.nombre}</Text>
-            <View style={styles.priceContainer}>
-              {origPrice > itemPrice && (
-                <Text style={styles.originalPrice}>${origPrice.toFixed(2)}</Text>
-              )}
-              <Text style={styles.discountedPrice}>${itemPrice.toFixed(2)}</Text>
-            </View>
-          </View>
-        </View>
-      </TouchableOpacity>
-    );
-  };
-
-  if (!items || items.length === 0) return null;
-
-  return (
-    <View style={styles.sliderContainer}>
-      <FlatList
-        ref={flatListRef}
-        data={items}
-        renderItem={renderItem}
-        keyExtractor={(item, index) => (item.id || item.id_producto || index).toString()}
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        onScroll={handleScroll}
-        scrollEventThrottle={16}
-        getItemLayout={getItemLayout}
-        initialScrollIndex={0}
-        snapToInterval={width - 40}
-        decelerationRate="fast"
-        snapToAlignment="start"
-        contentContainerStyle={styles.sliderContentContainer}
-      />
-      {items.length > 1 && (
-        <View style={styles.pagination}>
-          {items.map((_, index) => (
+const FilterOptions = ({ label, options, selectedValue, onSelect }) => (
+  <View style={styles.filterGroup}>
+    <Text style={styles.filterLabel}>{label}</Text>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+      <View style={styles.filterOptions}>
+        {options.map((option) => {
+          const isSelected = option.value === selectedValue;
+          return (
             <TouchableOpacity
-              key={index}
-              style={[
-                styles.paginationDot,
-                index === currentIndex && styles.paginationDotActive
-              ]}
-              onPress={() => {
-                flatListRef.current?.scrollToIndex({
-                  index,
-                  animated: true,
-                });
-                setCurrentIndex(index);
-              }}
-              activeOpacity={0.7}
-            />
-          ))}
-        </View>
-      )}
-    </View>
-  );
-};
+              key={option.value}
+              accessibilityRole="button"
+              accessibilityState={{ selected: isSelected }}
+              style={[styles.filterChip, isSelected && styles.filterChipSelected]}
+              onPress={() => onSelect(option.value)}
+            >
+              <Text style={[styles.filterChipText, isSelected && styles.filterChipTextSelected]}>
+                {option.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </ScrollView>
+  </View>
+);
 
-const CategorySection = ({ title, items, onPressItem, onPressCombo, onAddComboToCart }) => {
-  const renderItem = ({ item }) => (
-    <View style={styles.productCard}>
-      {item?.isCombo || item?.type === 'combo' ? (
-        <ComboCard 
-          combo={item} 
-          onPress={() => onPressCombo(item)} 
-          onAddToCart={() => onAddComboToCart(item)}
-        />
-      ) : (
-        <ProductCard product={item} onPress={onPressItem} />
-      )}
-    </View>
-  );
-
-  if (!items || items.length === 0) return null;
-
-  return (
-    <View style={styles.categorySection}>
-      <Text style={styles.sectionTitle}>{title} ({items.length})</Text>
-      <FlatList
-        data={items}
-        renderItem={renderItem}
-        keyExtractor={(item, index) => (item?.id || item?.id_producto || index).toString()}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.categoryList}
-        ListEmptyComponent={
-          <View style={{padding: 16}}>
-            <Text>No hay productos en esta categoría</Text>
-          </View>
-        }
-      />
-    </View>
-  );
-};
-
-const HomeScreen = ({ navigation }) => {
+const HomeScreen = () => {
   const { products, loading } = useProducts();
-  const { searchQuery, setSearchQuery, searchResults, filterData } = useSearch();
   const { addItem } = useCart();
-
-  const handleAddToCart = (product) => {
-    try {
-      addItem(product, 1);
-    } catch (error) {
-      Alert.alert('Stock insuficiente', error.message);
-    }
-  };
-
+  const [searchQuery, setSearchQuery] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [brandFilter, setBrandFilter] = useState('');
+  const [minimumPrice, setMinimumPrice] = useState('');
+  const [maximumPrice, setMaximumPrice] = useState('');
   const [menuVisible, setMenuVisible] = useState(false);
   const [selectedCombo, setSelectedCombo] = useState(null);
   const [comboModalVisible, setComboModalVisible] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
+  const [successMessage, setSuccessMessage] = useState('');
 
-  const filteredSections = searchQuery ? searchResults : products;
-  
-  const handleSearch = (query) => {
-    setSearchQuery(query);
-    if (query) {
-      filterData(products);
+  const allProducts = useMemo(
+    () => Object.values(products || {}).flat().filter(Boolean),
+    [products]
+  );
+
+  const categories = useMemo(() => (
+    [...new Set(allProducts.map(getCategory).filter(Boolean))]
+      .sort((a, b) => a.localeCompare(b, 'es'))
+  ), [allProducts]);
+
+  const brands = useMemo(() => (
+    [...new Set(allProducts.map(getBrand).filter(Boolean))]
+      .sort((a, b) => a.localeCompare(b, 'es'))
+  ), [allProducts]);
+
+  const visibleProducts = useMemo(() => {
+    const query = normalizeFilterValue(searchQuery);
+    const min = minimumPrice.trim() ? Number(minimumPrice.replace(',', '.')) : null;
+    const max = maximumPrice.trim() ? Number(maximumPrice.replace(',', '.')) : null;
+
+    return allProducts
+      .filter((product) => {
+        const name = normalizeFilterValue(getProductName(product));
+        const description = normalizeFilterValue(product.description || product.descripcion);
+        const category = normalizeFilterValue(getCategory(product));
+        const brand = normalizeFilterValue(getBrand(product));
+        const price = Number(product.price ?? product.precio ?? 0);
+
+        return (!query || name.includes(query) || description.includes(query) || category.includes(query) || brand.includes(query))
+          && (!categoryFilter || category === normalizeFilterValue(categoryFilter))
+          && (!brandFilter || brand === normalizeFilterValue(brandFilter))
+          && (min === null || !Number.isFinite(min) || price >= min)
+          && (max === null || !Number.isFinite(max) || price <= max);
+      })
+      .sort((a, b) => getProductName(a).localeCompare(getProductName(b), 'es'));
+  }, [allProducts, searchQuery, categoryFilter, brandFilter, minimumPrice, maximumPrice]);
+
+  const handleAddToCart = (product, quantity = 1) => {
+    try {
+      addItem(product, quantity);
+      const name = getProductName(product);
+      setSuccessMessage(
+        `${quantity} ${quantity === 1 ? 'unidad agregada' : 'unidades agregadas'} de "${name}" al carrito.`
+      );
+      return true;
+    } catch (error) {
+      Alert.alert('Stock insuficiente', error.message);
+      return false;
     }
   };
 
@@ -227,103 +140,150 @@ const HomeScreen = ({ navigation }) => {
     }
   };
 
-  const handleComboPress = (combo) => {
-    setSelectedCombo(combo);
-    setComboModalVisible(true);
+  const relatedProducts = useMemo(() => {
+    if (!selectedProduct) return [];
+
+    const selectedId = selectedProduct.id || selectedProduct.id_producto;
+    const selectedCategory = normalizeFilterValue(getCategory(selectedProduct));
+    return allProducts.filter((product) => (
+      !product.isCombo
+      && product.type !== 'combo'
+      && normalizeFilterValue(getCategory(product)) === selectedCategory
+      && (product.id || product.id_producto) !== selectedId
+    ));
+  }, [allProducts, selectedProduct]);
+
+  const clearFilters = () => {
+    setCategoryFilter('');
+    setBrandFilter('');
+    setMinimumPrice('');
+    setMaximumPrice('');
+    setSearchQuery('');
   };
 
-  const allProductsList = Object.values(filteredSections || {})
-    .flat()
-    .filter(item => item && !item.isCombo && item.type !== 'combo');
-
-  const selectedProdId = selectedProduct?.id || selectedProduct?.id_producto;
-  const selectedCategory = selectedProduct?.category
-    || selectedProduct?.categoria_nombre
-    || selectedProduct?.categoria;
-  const relatedProducts = allProductsList.filter((product) => {
-    const productCategory = product?.category
-      || product?.categoria_nombre
-      || product?.categoria;
-
-    return productCategory === selectedCategory
-      && (product.id || product.id_producto) !== selectedProdId;
-  });
+  const renderProduct = ({ item }) => (
+    <View style={styles.productCell}>
+      {item?.isCombo || item?.type === 'combo' ? (
+        <ComboCard
+          combo={item}
+          onPress={() => handleProductPress(item)}
+          onAddToCart={(combo, quantity) => handleAddToCart(combo, quantity)}
+        />
+      ) : (
+        <ProductCard
+          product={item}
+          onPress={handleProductPress}
+          onAddToCart={handleAddToCart}
+        />
+      )}
+    </View>
+  );
 
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text style={{ marginTop: 10 }}>Cargando productos...</Text>
+        <Text style={styles.loadingText}>Cargando productos...</Text>
       </View>
     );
   }
 
+  const listHeader = (
+    <View style={styles.contentContainer}>
+      <Text style={styles.catalogTitle}>Catálogo</Text>
+
+      <View style={styles.filtersContainer}>
+        <Text style={styles.filtersTitle}>Filtrar productos</Text>
+        <FilterOptions
+          label="Categoría"
+          options={[
+            { label: 'Todas', value: '' },
+            ...categories.map((category) => ({ label: category, value: category })),
+          ]}
+          selectedValue={categoryFilter}
+          onSelect={setCategoryFilter}
+        />
+        <FilterOptions
+          label="Marca"
+          options={[
+            { label: 'Todas', value: '' },
+            ...brands.map((brand) => ({ label: brand, value: brand })),
+          ]}
+          selectedValue={brandFilter}
+          onSelect={setBrandFilter}
+        />
+        <View style={styles.priceFilter}>
+          <Text style={styles.filterLabel}>Precio ($)</Text>
+          <View style={styles.priceInputs}>
+            <TextInput
+              style={styles.priceInput}
+              value={minimumPrice}
+              onChangeText={setMinimumPrice}
+              keyboardType="decimal-pad"
+              placeholder="Desde"
+              accessibilityLabel="Precio mínimo"
+            />
+            <Text style={styles.priceSeparator}>a</Text>
+            <TextInput
+              style={styles.priceInput}
+              value={maximumPrice}
+              onChangeText={setMaximumPrice}
+              keyboardType="decimal-pad"
+              placeholder="Hasta"
+              accessibilityLabel="Precio máximo"
+            />
+            <TouchableOpacity style={styles.clearFiltersButton} onPress={clearFilters}>
+              <Ionicons name="refresh" size={16} color={COLORS.primary} />
+              <Text style={styles.clearFiltersText}>Limpiar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+
+      <Text style={styles.resultsText}>
+        {visibleProducts.length} {visibleProducts.length === 1 ? 'producto' : 'productos'}
+      </Text>
+    </View>
+  );
+
   return (
     <>
-      <ScreenWithHeader onSearch={handleSearch}>
-        <ImageBackground
-          source={IMAGES.BACKGROUND}
-          style={styles.backgroundImage}
-          resizeMode="cover">
-          <View style={styles.backgroundImage}>
-            <Image
-              source={IMAGES.BACKGROUND}
-              style={{
-                width: '100%',
-                height: '100%',
-                resizeMode: 'cover',
-                position: 'absolute',
-              }}
-            />
-          </View>
-          <ScrollView style={styles.container}>
-            <View style={styles.contentContainer}>
-              {filteredSections.featured && filteredSections.featured.length > 0 && (
-                <View style={styles.section}>
-                  <Text style={styles.sectionHeader}>Ofertas Especiales</Text>
-                  <FeaturedSlider 
-                    items={filteredSections.featured} 
-                    onPressItem={handleProductPress}
-                  />
-                </View>
-              )}
-
-              {Object.keys(filteredSections).map(category => {
-                if (category === 'featured') return null;
-
-                return (
-                  <CategorySection
-                    key={category}
-                    title={sectionTitles[category] || category}
-                    items={filteredSections[category]}
-                    onPressItem={handleProductPress}
-                    onPressCombo={handleComboPress}
-                    onAddComboToCart={handleAddToCart}
-                  />
-                );
-              })}
-            </View>
-          </ScrollView>
+      <ScreenWithHeader onSearch={setSearchQuery}>
+        <ImageBackground source={IMAGES.BACKGROUND} style={styles.backgroundImage} resizeMode="cover">
+          <Image
+            source={IMAGES.BACKGROUND}
+            style={styles.backgroundCover}
+            resizeMode="cover"
+          />
+          <FlatList
+            data={visibleProducts}
+            renderItem={renderProduct}
+            keyExtractor={(item, index) => `${item?.type || (item?.isCombo ? 'combo' : 'product')}-${item?.id || item?.id_producto || index}`}
+            numColumns={2}
+            columnWrapperStyle={styles.productRow}
+            contentContainerStyle={styles.catalogList}
+            ListHeaderComponent={listHeader}
+            ListEmptyComponent={
+              <View style={styles.emptyResults}>
+                <Ionicons name="search-outline" size={34} color={COLORS.textSecondary} />
+                <Text style={styles.emptyResultsText}>No se encontraron productos con esos filtros.</Text>
+              </View>
+            }
+          />
         </ImageBackground>
       </ScreenWithHeader>
 
-      <TouchableOpacity
-        style={styles.menuButton}
-        onPress={() => setMenuVisible(true)}
-      >
+      <TouchableOpacity style={styles.menuButton} onPress={() => setMenuVisible(true)}>
         <Ionicons name="menu" size={24} color={COLORS.white} />
       </TouchableOpacity>
 
-      <MenuModal
-        visible={menuVisible}
-        onClose={() => setMenuVisible(false)}
-      />
+      <MenuModal visible={menuVisible} onClose={() => setMenuVisible(false)} />
 
       <ComboDetailModal
         visible={comboModalVisible}
         combo={selectedCombo}
         onClose={() => setComboModalVisible(false)}
-        onAddToCart={(combo) => addItem(combo, 1)}
+        onAddToCart={(combo, quantity) => handleAddToCart(combo, quantity)}
       />
 
       <ProductDetailModal
@@ -331,130 +291,163 @@ const HomeScreen = ({ navigation }) => {
         product={selectedProduct}
         relatedProducts={relatedProducts}
         onClose={() => setSelectedProduct(null)}
-        onAddToCart={(product, quantity) => addItem(product, quantity || 1)}
-        onSelectProduct={(product) => setSelectedProduct(product)}
+        onAddToCart={handleAddToCart}
+        onSelectProduct={setSelectedProduct}
       />
+
+      <Modal
+        animationType="fade"
+        transparent
+        visible={!!successMessage}
+        onRequestClose={() => setSuccessMessage('')}
+      >
+        <View style={styles.successOverlay}>
+          <View style={styles.successCard}>
+            <Ionicons name="checkmark-circle" size={54} color={COLORS.success || '#22c55e'} />
+            <Text style={styles.successTitle}>¡Agregado al carrito!</Text>
+            <Text style={styles.successText}>{successMessage}</Text>
+            <TouchableOpacity
+              style={styles.successButton}
+              onPress={() => setSuccessMessage('')}
+            >
+              <Text style={styles.successButtonText}>Continuar comprando</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: 'transparent',
-  },
-  contentContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
-    borderRadius: 12,
-    margin: 10,
-    padding: 10,
-    flex: 1,
-  },
   backgroundImage: {
     ...StyleSheet.absoluteFillObject,
   },
-  section: {
-    marginBottom: 24,
-  },
-  sectionHeader: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginHorizontal: 16,
-    marginBottom: 12,
-    color: COLORS.darkGray,
-  },
-  sliderContainer: {
-    height: 240,
-    paddingVertical: 8,
-  },
-  slide: {
-    width: width - 60,
-    marginHorizontal: 8,
-    borderRadius: 10,
-    overflow: 'hidden',
-    backgroundColor: COLORS.white,
-    ...theme.shadow.sm,
-    marginBottom: 8,
-    height: 240,
-  },
-  featuredCard: {
-    flex: 1,
-    position: 'relative',
-    borderRadius: 10,
-    overflow: 'hidden',
-  },
-  discountBadge: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: COLORS.danger,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: 10,
-    zIndex: 1,
-  },
-  discountText: {
-    color: COLORS.white,
-    fontWeight: 'bold',
-    fontSize: 11,
-  },
-  featuredImage: {
+  backgroundCover: {
+    ...StyleSheet.absoluteFillObject,
     width: '100%',
-    height: 150,
-    backgroundColor: '#f8f8f8',
+    height: '100%',
   },
-  featuredInfo: {
-    padding: 10,
-    backgroundColor: '#fff',
+  catalogList: {
+    flexGrow: 1,
+    paddingBottom: 88,
   },
-  featuredName: {
-    fontSize: 14,
-    fontWeight: '600',
+  contentContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    borderRadius: 12,
+    margin: 10,
     marginBottom: 4,
+    padding: 14,
+  },
+  catalogTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: COLORS.darkGray,
+    marginBottom: 12,
+  },
+  filtersContainer: {
+    padding: 12,
+    backgroundColor: COLORS.white,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  filtersTitle: {
+    ...theme.typography.subtitle,
     color: COLORS.text,
+    marginBottom: 6,
   },
-  priceContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  originalPrice: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    textDecorationLine: 'line-through',
-    marginRight: 8,
-  },
-  discountedPrice: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: COLORS.primary,
-  },
-  sliderContentContainer: {
-    paddingHorizontal: 8,
-  },
-  pagination: {
-    flexDirection: 'row',
-    position: 'absolute',
-    bottom: 10,
-    alignSelf: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 15,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-    justifyContent: 'center',
-    alignItems: 'center',
+  filterGroup: {
     marginTop: 8,
   },
-  paginationDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.5)',
-    marginHorizontal: 3,
+  filterLabel: {
+    ...theme.typography.caption,
+    color: COLORS.textSecondary,
+    fontWeight: '700',
+    marginBottom: 6,
   },
-  paginationDotActive: {
-    backgroundColor: COLORS.white,
-    width: 20,
+  filterOptions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingRight: 8,
+  },
+  filterChip: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    backgroundColor: '#f8fafc',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    marginRight: 7,
+  },
+  filterChipSelected: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  filterChipText: {
+    fontSize: 12,
+    color: COLORS.text,
+  },
+  filterChipTextSelected: {
+    color: COLORS.white,
+    fontWeight: '700',
+  },
+  priceFilter: {
+    marginTop: 10,
+  },
+  priceInputs: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  priceInput: {
+    flex: 1,
+    height: 38,
+    width: 50,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 7,
+    paddingHorizontal: 10,
+    backgroundColor: '#fff',
+    color: COLORS.text,
+  },
+  priceSeparator: {
+    marginHorizontal: 8,
+    color: COLORS.textSecondary,
+  },
+  clearFiltersButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 10,
+  },
+  clearFiltersText: {
+    color: COLORS.primary,
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 3,
+  },
+  resultsText: {
+    marginTop: 12,
+    fontSize: 13,
+    color: COLORS.textSecondary,
+  },
+  productRow: {
+    paddingHorizontal: 6,
+    alignItems: 'stretch',
+  },
+  productCell: {
+    width: '50%',
+    paddingHorizontal: 4,
+    paddingBottom: 8,
+  },
+  emptyResults: {
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 40,
+  },
+  emptyResultsText: {
+    marginTop: 10,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
   },
   menuButton: {
     position: 'absolute',
@@ -473,31 +466,57 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     zIndex: 1000,
   },
-  categorySection: {
-    marginBottom: 24,
-    width: '100%',
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginHorizontal: 16,
-    marginBottom: 12,
-    color: COLORS.darkGray,
-  },
-  categoryList: {
-    paddingHorizontal: 8,
-    paddingBottom: 8,
-  },
-  productCard: {
-    width: 160,
-    marginRight: 12,
-    marginBottom: 8,
-  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: COLORS.background,
+  },
+  loadingText: {
+    marginTop: 10,
+  },
+  successOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  successCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: COLORS.white,
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    elevation: 10,
+  },
+  successTitle: {
+    marginTop: 12,
+    fontSize: 23,
+    fontWeight: '700',
+    color: COLORS.primary,
+    textAlign: 'center',
+  },
+  successText: {
+    marginTop: 10,
+    fontSize: 15,
+    lineHeight: 22,
+    color: COLORS.text,
+    textAlign: 'center',
+  },
+  successButton: {
+    width: '100%',
+    marginTop: 20,
+    backgroundColor: COLORS.primary,
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  successButtonText: {
+    color: COLORS.white,
+    fontWeight: '700',
+    fontSize: 15,
   },
 });
 

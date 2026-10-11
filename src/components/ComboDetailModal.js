@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Modal,
   View,
@@ -10,14 +10,17 @@ import {
   Dimensions,
   Alert,
 } from 'react-native';
+import { useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
 import COLORS from '../constants/colors';
+import { calculateStockUsed } from '../redux/slices/cartSlice';
 
 const { height } = Dimensions.get('window');
 const defaultImage = require('../assets/images/producto-default.jpg');
 
 const ComboDetailModal = ({ visible, combo, onClose, onAddToCart }) => {
-  if (!combo) return null;
+  const cartItems = useSelector((state) => state.cart?.items || []);
+  const [quantity, setQuantity] = useState(1);
 
   // Extraer el nombre del combo
   const comboName = combo?.name || combo?.nombre_combo || combo?.nombre || 'Combo';
@@ -32,6 +35,45 @@ const ComboDetailModal = ({ visible, combo, onClose, onAddToCart }) => {
         : Array.isArray(combo?.incluye)
           ? combo.incluye
           : [];
+  const comboId = combo?.id_combo ?? combo?.id;
+  const availableComboQuantity = includedItems.length > 0
+    ? Math.min(...includedItems.map((item) => {
+      const productId = item?.id_producto ?? item?.id;
+      const stock = Number(item?.stock ?? item?.existencia ?? 0);
+      const quantityInCombo = Number(item?.quantity ?? item?.cantidad ?? 1);
+      const availableStock = Math.max(0, stock - calculateStockUsed(cartItems, productId));
+
+      return quantityInCombo > 0
+        ? Math.floor(availableStock / quantityInCombo)
+        : 0;
+    }))
+    : Number.isFinite(Number(combo?.stock ?? combo?.existencia))
+      && Number(combo?.stock ?? combo?.existencia) > 0
+      ? Math.max(
+        0,
+        Number(combo?.stock ?? combo?.existencia)
+          - cartItems
+            .filter((item) => item.isCombo && (item.id === comboId || item.id_combo === comboId))
+            .reduce((total, item) => total + (Number(item.quantity) || 0), 0)
+      )
+      : Infinity;
+  const isOutOfStock = availableComboQuantity <= 0;
+
+  useEffect(() => {
+    if (visible) {
+      setQuantity(1);
+    }
+  }, [visible, comboId]);
+
+  useEffect(() => {
+    if (Number.isFinite(availableComboQuantity)) {
+      setQuantity((currentQuantity) => (
+        Math.max(1, Math.min(currentQuantity, availableComboQuantity || 1))
+      ));
+    }
+  }, [availableComboQuantity]);
+
+  if (!combo) return null;
 
   // Función helper para resolver la imagen de un producto/item
   const getItemImage = (item) => {
@@ -132,19 +174,71 @@ const ComboDetailModal = ({ visible, combo, onClose, onAddToCart }) => {
           {/* Footer con precio total y acción */}
           <View style={styles.footer}>
             <View style={styles.priceContainer}>
-              <Text style={styles.totalLabel}>Precio Total:</Text>
+              <Text style={styles.totalLabel}>
+                {quantity > 1 ? `Total (${quantity} combos):` : 'Precio Total:'}
+              </Text>
               <Text style={styles.totalPrice}>
-                ${totalPrice.toFixed(2)}
+                ${(totalPrice * quantity).toFixed(2)}
+              </Text>
+            </View>
+
+            <View style={styles.quantityContainer}>
+              <Text style={styles.quantityLabel}>Cantidad</Text>
+              <View style={styles.quantitySelector}>
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel="Disminuir cantidad del combo"
+                  style={[styles.quantityButton, quantity <= 1 && styles.quantityButtonDisabled]}
+                  onPress={() => setQuantity((currentQuantity) => Math.max(1, currentQuantity - 1))}
+                  disabled={quantity <= 1}
+                >
+                  <Ionicons
+                    name="remove"
+                    size={18}
+                    color={quantity <= 1 ? '#94a3b8' : COLORS.primary}
+                  />
+                </TouchableOpacity>
+                <Text style={styles.quantityValue}>{quantity}</Text>
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel="Aumentar cantidad del combo"
+                  style={[
+                    styles.quantityButton,
+                    quantity >= availableComboQuantity && styles.quantityButtonDisabled,
+                  ]}
+                  onPress={() => setQuantity((currentQuantity) => (
+                    Number.isFinite(availableComboQuantity)
+                      ? Math.min(availableComboQuantity, currentQuantity + 1)
+                      : currentQuantity + 1
+                  ))}
+                  disabled={quantity >= availableComboQuantity}
+                >
+                  <Ionicons
+                    name="add"
+                    size={18}
+                    color={quantity >= availableComboQuantity ? '#94a3b8' : COLORS.primary}
+                  />
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.availableStock}>
+                {isOutOfStock
+                  ? 'Agotado'
+                  : Number.isFinite(availableComboQuantity)
+                    ? `${availableComboQuantity} disponibles`
+                    : 'Disponible'}
               </Text>
             </View>
 
             <TouchableOpacity
-              style={styles.addButton}
+              style={[styles.addButton, isOutOfStock && styles.addButtonDisabled]}
+              disabled={isOutOfStock}
               onPress={() => {
                 if (onAddToCart) {
                   try {
-                    onAddToCart(combo);
-                    onClose();
+                    const wasAdded = onAddToCart(combo, quantity);
+                    if (wasAdded !== false) {
+                      onClose();
+                    }
                   } catch (error) {
                     Alert.alert('Stock insuficiente', error.message);
                   }
@@ -280,6 +374,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 12,
   },
   priceContainer: {
     flexDirection: 'column',
@@ -293,6 +389,41 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: COLORS.primary || '#007AFF',
   },
+  quantityContainer: {
+    alignItems: 'center',
+  },
+  quantityLabel: {
+    fontSize: 12,
+    color: COLORS.textSecondary || '#666',
+    marginBottom: 4,
+  },
+  quantitySelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    backgroundColor: '#f8fafc',
+  },
+  quantityButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
+  quantityButtonDisabled: {
+    opacity: 0.45,
+  },
+  quantityValue: {
+    minWidth: 24,
+    textAlign: 'center',
+    color: COLORS.text || '#333',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  availableStock: {
+    fontSize: 10,
+    color: COLORS.textSecondary || '#777',
+    marginTop: 3,
+  },
   addButton: {
     backgroundColor: COLORS.primary || '#007AFF',
     flexDirection: 'row',
@@ -300,6 +431,9 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderRadius: 8,
+  },
+  addButtonDisabled: {
+    backgroundColor: COLORS.gray || '#94a3b8',
   },
   addButtonText: {
     color: COLORS.white || '#FFF',

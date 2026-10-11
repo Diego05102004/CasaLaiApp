@@ -29,20 +29,23 @@ const MenuModal = ({ visible, onClose }) => {
   };
 
   const menuItems = [
-    { id: '1', title: 'Catálogo', icon: 'grid-outline' },
-    { id: '2', title: 'Mi Perfil', icon: 'person-outline' },
-    { id: '3', title: 'Mis Pedidos', icon: 'receipt-outline' },
-    { id: '4', title: 'Ayuda', icon: 'help-circle-outline' },
+    { id: '1', title: 'Gestionar Catálogo', icon: 'grid-outline' },
+    { id: '2', title: 'Gestionar Carrito', icon: 'cart-outline' },
+    { id: '3', title: 'Gestionar Pedidos y Pagos', icon: 'receipt-outline' },
+    { id: '4', title: 'Gestionar Usuario', icon: 'person-outline' },
+    { id: '5', title: 'Solicitar Ayuda', icon: 'help-circle-outline' },
   ];
 
   const handleMenuItemPress = (itemId) => {
     if (itemId === '1') {
       navigation.navigate('Catalog');
     } else if (itemId === '2') {
-      navigation.navigate('Profile');
-    } else if (itemId === '3') {
+      navigation.navigate('Carrito');
+    }  else if (itemId === '3') {
       navigation.navigate('Pedidos');
-    } else if (itemId === '4') {
+    }else if (itemId === '4') {
+      navigation.navigate('Profile');
+    } else if (itemId === '5') {
       navigation.navigate('Help');
     }
     onClose();

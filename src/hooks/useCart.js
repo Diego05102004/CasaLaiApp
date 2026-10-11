@@ -8,13 +8,26 @@ export const useCart = () => {
 
   const addItem = (product, quantity = 1) => {
     try {
+      const isCombo = Boolean(product?.isCombo || product?.type === 'combo');
+      const comboProducts = isCombo
+        ? (product?.comboProducts ?? product?.products ?? product?.productos ?? []).map((item) => ({
+          ...item,
+          id: item?.id_producto ?? item?.id,
+          quantity: item?.quantity ?? item?.cantidad ?? 1,
+          stock: item?.stock ?? item?.existencia,
+          existencia: item?.existencia ?? item?.stock,
+        }))
+        : [];
+
       dispatch(addToCart({ 
         ...product, 
         quantity,
+        isCombo,
+        comboProducts,
         // Asegurarse de que el precio sea un número
         price: typeof product.price === 'string' ? parseFloat(product.price) : product.price,
-        stock: product?.stock || product?.existencia,
-        existencia: product?.existencia || product?.stock,
+        stock: product?.stock ?? product?.existencia,
+        existencia: product?.existencia ?? product?.stock,
       }));
     } catch (error) {
       throw error;

@@ -140,8 +140,10 @@ const ProductDetailModal = ({
   const handleAddToCart = () => {
     if (onAddToCart) {
       try {
-        onAddToCart(product, quantity);
-        onClose();
+        const wasAdded = onAddToCart(product, quantity);
+        if (wasAdded !== false) {
+          onClose();
+        }
       } catch (error) {
         Alert.alert('Stock insuficiente', error.message);
       }

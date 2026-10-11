@@ -645,20 +645,6 @@ const ProfileScreen = () => {
           {isEditingPersonal ? (
             <View style={styles.formGroup}>
               <View style={styles.inputBlock}>
-                <Text style={styles.infoLabel}>Nombre de Usuario</Text>
-                <TextInput
-                  style={[styles.input, errorsPersonal.username && styles.inputError]}
-                  value={username}
-                  onChangeText={handleChangeUsername}
-                  placeholder="Mínimo 4 caracteres"
-                  autoCapitalize="none"
-                />
-                {errorsPersonal.username ? <Text style={styles.errorText}>{errorsPersonal.username}</Text> : null}
-              </View>
-
-
-
-              <View style={styles.inputBlock}>
                 <Text style={styles.infoLabel}>Nombres</Text>
                 <TextInput
                   style={[styles.input, errorsPersonal.name && styles.inputError]}
@@ -730,11 +716,10 @@ const ProfileScreen = () => {
             </View>
           ) : (
             <>
-              {renderUserField('Nombre de Usuario', username)}
               {renderUserField('Nombres', name)}
               {renderUserField('Apellidos', lastName)}
               {renderUserField('Teléfono', phone)}
-              {renderUserField('Cédula', getUserCedula())}
+     
             </>
           )}
         </View>
