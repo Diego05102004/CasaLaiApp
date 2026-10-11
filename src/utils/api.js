@@ -6,9 +6,18 @@
 import { sanitizeForAPI } from '../sanitization';
 import { API_CONFIG as IMPORTED_API_CONFIG } from '../config/apiConfig';
 import { encryption } from './encryption';
+import { getStoredToken } from './jwt';
 
 // Configuración de la API (usando configuración centralizada)
 let API_CONFIG = { ...IMPORTED_API_CONFIG };
+
+const getRequestHeaders = async () => {
+  const token = await getStoredToken();
+  return {
+    ...API_CONFIG.headers,
+    ...(token ? { Authorization: `Bearer ${token.replace(/^Bearer\s+/i, '')}` } : {}),
+  };
+};
 
 /**
  * Crea un AbortSignal con timeout compatible con todos los navegadores
@@ -124,11 +133,7 @@ export const secureGet = async (endpoint, params = {}, schema = null) => {
     const { signal, timeoutId } = createTimeoutSignal(API_CONFIG.timeout);
     const response = await fetch(url.toString(), {
       method: 'GET',
-      headers: {
-        ...API_CONFIG.headers,
-        // Agregar token de autenticación si existe
-        // 'Authorization': `Bearer ${token}`,
-      },
+      headers: await getRequestHeaders(),
       signal,
     });
 
@@ -163,11 +168,7 @@ export const securePost = async (endpoint, data = {}, schema = null, requestTime
     const { signal, timeoutId } = createTimeoutSignal(requestTimeout);
     const response = await fetch(url, {
       method: 'POST',
-      headers: {
-        ...API_CONFIG.headers,
-        // Agregar token de autenticación si existe
-        // 'Authorization': `Bearer ${token}`,
-      },
+      headers: await getRequestHeaders(),
       body: JSON.stringify(sanitizedData),
       signal,
     });
@@ -207,11 +208,7 @@ export const securePut = async (endpoint, data = {}, schema = null, encryptSensi
     const { signal, timeoutId } = createTimeoutSignal(API_CONFIG.timeout);
     const response = await fetch(`${API_CONFIG.baseURL}${endpoint}`, {
       method: 'PUT',
-      headers: {
-        ...API_CONFIG.headers,
-        // Agregar token de autenticación si existe
-        // 'Authorization': `Bearer ${token}`,
-      },
+      headers: await getRequestHeaders(),
       body: JSON.stringify(sanitizedData),
       signal,
     });
@@ -246,11 +243,7 @@ export const secureDelete = async (endpoint, params = {}, schema = null) => {
     const { signal, timeoutId } = createTimeoutSignal(API_CONFIG.timeout);
     const response = await fetch(url.toString(), {
       method: 'DELETE',
-      headers: {
-        ...API_CONFIG.headers,
-        // Agregar token de autenticación si existe
-        // 'Authorization': `Bearer ${token}`,
-      },
+      headers: await getRequestHeaders(),
       signal,
     });
 
@@ -395,12 +388,6 @@ export const API_SCHEMAS = {
     reference: { type: 'reference' },
     bankId: { type: 'text', maxLength: 4 },
     amount: { type: 'number' },
-  },
-  
-  // Carrito
-  addToCart: {
-    productId: { type: 'text' },
-    quantity: { type: 'number' },
   },
   
   // Perfil

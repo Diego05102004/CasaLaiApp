@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, Image, TouchableOpacity, TextInput, Alert, ActivityIndicator, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
-import { useSelector, useDispatch } from 'react-redux';
-import { removeFromCart, clearCart, updateQuantity } from '../../redux/slices/cartSlice';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useSelector } from 'react-redux';
+import { useCart } from '../../hooks/useCart';
 import COLORS from '../../constants/colors';
 import theme from '../../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
@@ -56,61 +56,92 @@ const getOrderProducts = (cartItems) => {
   return Array.from(productsById.values());
 };
 
+const CartQuantityInput = ({ quantity, disabled, onCommit }) => {
+  const [draft, setDraft] = useState(String(quantity));
+
+  useEffect(() => {
+    setDraft(String(quantity));
+  }, [quantity]);
+
+  const commitQuantity = () => {
+    const nextQuantity = Number.parseInt(draft, 10);
+    if (Number.isInteger(nextQuantity) && nextQuantity > 0) {
+      onCommit(nextQuantity);
+    } else {
+      setDraft(String(quantity));
+    }
+  };
+
+  return (
+    <TextInput
+      style={styles.quantityInput}
+      value={draft}
+      keyboardType="numeric"
+      editable={!disabled}
+      onChangeText={setDraft}
+      onEndEditing={commitQuantity}
+    />
+  );
+};
+
 const CartScreen = () => {
   const navigation = useNavigation();
-  const dispatch = useDispatch();
-  const { items, total } = useSelector(state => state.cart);
+  const {
+    items,
+    total,
+    isLoading,
+    isMutating,
+    error,
+    refreshCart,
+    removeItem,
+    updateItemQuantity,
+    clearCart,
+  } = useCart();
   const { user, jwtPayload } = useSelector(state => state.auth);
+  const isLoadingOrderProducts = isLoading || isMutating;
 
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
   const [successModalVisible, setSuccessModalVisible] = useState(false);
 
-  const handleRemoveFromCart = (productId) => {
-    dispatch(removeFromCart(productId));
-  };
+  useFocusEffect(useCallback(() => {
+    refreshCart().catch(() => {});
+  }, [refreshCart]));
 
-  const handleIncrement = (productId, currentQuantity) => {
+  const handleRemoveFromCart = async (cartItemId) => {
     try {
-      dispatch(updateQuantity({ 
-        id: productId, 
-        quantity: currentQuantity + 1 
-      }));
+      await removeItem(cartItemId);
     } catch (error) {
-      Alert.alert('Stock insuficiente', error.message);
+      Alert.alert('No se pudo eliminar el producto', error?.message || 'Inténtalo de nuevo.');
     }
   };
 
-  const handleDecrement = (productId, currentQuantity) => {
-    if (currentQuantity > 1) {
-      try {
-        dispatch(updateQuantity({ 
-          id: productId, 
-          quantity: currentQuantity - 1 
-        }));
-      } catch (error) {
-        Alert.alert('Stock insuficiente', error.message);
-      }
-    } else {
-      dispatch(removeFromCart(productId));
+  const handleQuantityChange = async (cartItemId, quantity) => {
+    try {
+      await updateItemQuantity(cartItemId, quantity);
+    } catch (error) {
+      Alert.alert('No se pudo actualizar la cantidad', error?.message || 'Inténtalo de nuevo.');
     }
   };
 
-  const handleQuantityChange = (productId, newQuantity) => {
-    const quantity = parseInt(newQuantity) || 1;
-    if (quantity > 0) {
-      try {
-        dispatch(updateQuantity({ id: productId, quantity }));
-      } catch (error) {
-        Alert.alert('Stock insuficiente', error.message);
-      }
+  const handleClearCart = async () => {
+    try {
+      await clearCart();
+    } catch (error) {
+      Alert.alert('No se pudo vaciar el carrito', error?.message || 'Inténtalo de nuevo.');
     }
-  };
-
-  const handleClearCart = () => {
-    dispatch(clearCart());
   };
 
   const handleCreateOrder = async () => {
+    if (isLoadingOrderProducts) {
+      Alert.alert('Carrito en actualización', 'Espera a que termine la sincronización antes de generar el pedido.');
+      return;
+    }
+
+    if (error) {
+      Alert.alert('Carrito sin sincronizar', 'Actualiza el carrito antes de generar el pedido.');
+      return;
+    }
+
     if (!items || items.length === 0) {
       Alert.alert('Carrito vacío', 'Debes agregar productos antes de generar un pedido.');
       return;
@@ -191,7 +222,7 @@ const CartScreen = () => {
 
       try {
         responseData = responseText ? JSON.parse(responseText) : {};
-      } catch (error) {
+      } catch {
         responseData = {};
       }
 
@@ -226,7 +257,15 @@ const CartScreen = () => {
         return;
       }
 
-      dispatch(clearCart());
+      try {
+        await clearCart();
+      } catch (clearError) {
+        console.error('[Cart] Pedido registrado, pero no se pudo vaciar el carrito:', clearError);
+        Alert.alert(
+          'Pedido generado',
+          'El pedido se registró, pero el carrito no pudo sincronizarse. Actualízalo antes de continuar.'
+        );
+      }
       console.log('[Cart] Pedido creado correctamente. Respuesta del backend:', {
         responseStatus: response.status,
         responseData,
@@ -245,8 +284,10 @@ const CartScreen = () => {
   };
 
   const renderItem = ({ item }) => {
-    const imageSource = item.image || 
-                       (item.imageUrl ? { uri: item.imageUrl } : null);
+    const imageValue = item.image || item.imageUrl;
+    const imageSource = typeof imageValue === 'string'
+      ? { uri: imageValue }
+      : imageValue || null;
     
     return (
       <View style={styles.cartItem}>
@@ -271,8 +312,8 @@ const CartScreen = () => {
             <View style={styles.quantityControls}>
               <TouchableOpacity 
                 style={[styles.quantityButton, item.quantity <= 1 && styles.disabledButton]}
-                onPress={() => handleDecrement(item.id, item.quantity)}
-                disabled={item.quantity <= 1}
+                onPress={() => handleQuantityChange(item.cartItemId, item.quantity - 1)}
+                disabled={item.quantity <= 1 || isMutating}
                 activeOpacity={0.7}
               >
                 <Ionicons 
@@ -282,19 +323,16 @@ const CartScreen = () => {
                 />
               </TouchableOpacity>
               
-              <TextInput
-                style={styles.quantityInput}
-                value={item.quantity.toString()}
-                keyboardType="numeric"
-                onChangeText={(text) => {
-                  const num = parseInt(text) || 1;
-                  handleQuantityChange(item.id, num);
-                }}
+              <CartQuantityInput
+                quantity={item.quantity}
+                disabled={isMutating}
+                onCommit={(quantity) => handleQuantityChange(item.cartItemId, quantity)}
               />
               
               <TouchableOpacity 
                 style={styles.quantityButton}
-                onPress={() => handleIncrement(item.id, item.quantity)}
+                onPress={() => handleQuantityChange(item.cartItemId, item.quantity + 1)}
+                disabled={isMutating}
                 activeOpacity={0.7}
               >
                 <Ionicons name="add" size={16} color={COLORS.primary} />
@@ -305,13 +343,36 @@ const CartScreen = () => {
         </View>
         <TouchableOpacity 
           style={styles.removeButton}
-          onPress={() => handleRemoveFromCart(item.id)}
+          onPress={() => handleRemoveFromCart(item.cartItemId)}
+          disabled={isMutating}
         >
           <Ionicons name="trash-outline" size={20} color={COLORS.danger} />
         </TouchableOpacity>
       </View>
     );
   };
+
+  if (isLoading && items.length === 0) {
+    return (
+      <View style={styles.emptyContainer}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+        <Text style={styles.emptySubtext}>Cargando tu carrito...</Text>
+      </View>
+    );
+  }
+
+  if (error && items.length === 0 && !successModalVisible) {
+    return (
+      <View style={styles.emptyContainer}>
+        <Ionicons name="cloud-offline-outline" size={54} color={COLORS.danger} />
+        <Text style={styles.emptyText}>No se pudo cargar el carrito</Text>
+        <Text style={styles.emptySubtext}>{error}</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={() => refreshCart().catch(() => {})}>
+          <Text style={styles.retryButtonText}>Reintentar</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   if (items.length === 0 && !successModalVisible) {
     return (
@@ -328,16 +389,25 @@ const CartScreen = () => {
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.header}>
           <Text style={styles.title}>Mi Carrito</Text>
-          <TouchableOpacity onPress={handleClearCart} style={styles.clearButton}>
+          <TouchableOpacity onPress={handleClearCart} style={styles.clearButton} disabled={isMutating}>
             <Ionicons name="trash-outline" size={21} color={COLORS.white} style={{marginRight: 5}} />
             <Text style={{ color: COLORS.white, fontSize: 16 }}>Vaciar</Text>
           </TouchableOpacity>
         </View>
 
+        {error ? (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorBannerText}>{error}</Text>
+            <TouchableOpacity onPress={() => refreshCart().catch(() => {})}>
+              <Text style={styles.retryLink}>Reintentar</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
         <FlatList
           data={items}
           renderItem={renderItem}
-          keyExtractor={item => item.id.toString()}
+          keyExtractor={item => item.cartItemId.toString()}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
         />
@@ -350,7 +420,7 @@ const CartScreen = () => {
           <TouchableOpacity
             style={[styles.checkoutButton, isCreatingOrder && styles.checkoutButtonDisabled]}
             onPress={handleCreateOrder}
-            disabled={isCreatingOrder}
+            disabled={isCreatingOrder || isMutating || isLoading}
           >
             {isCreatingOrder ? (
               <ActivityIndicator color={COLORS.white} size="small" />
@@ -572,6 +642,31 @@ const styles = StyleSheet.create({
   checkoutButtonText: {
     ...theme.typography.button,
     color: COLORS.white,
+  },
+  retryButton: {
+    marginTop: theme.spacing.md,
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.sm,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: COLORS.white,
+    fontWeight: '600',
+  },
+  errorBanner: {
+    marginHorizontal: theme.spacing.md,
+    padding: theme.spacing.sm,
+    backgroundColor: '#fee2e2',
+    borderRadius: 8,
+  },
+  errorBannerText: {
+    color: COLORS.danger,
+  },
+  retryLink: {
+    marginTop: 4,
+    color: COLORS.primary,
+    fontWeight: '600',
   },
   modalOverlay: {
     flex: 1,

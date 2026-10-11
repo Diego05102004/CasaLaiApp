@@ -39,6 +39,7 @@ const ProductDetailModal = ({
   const [quantity, setQuantity] = useState(1);
   const [detailProduct, setDetailProduct] = useState(null);
   const [error, setError] = useState(null);
+  const [isAddingToCart, setIsAddingToCart] = useState(false);
 
   useEffect(() => {
     if (!visible || !product) return undefined;
@@ -137,15 +138,18 @@ const ProductDetailModal = ({
     }
   };
 
-  const handleAddToCart = () => {
+  const handleAddToCart = async () => {
     if (onAddToCart) {
+      setIsAddingToCart(true);
       try {
-        const wasAdded = onAddToCart(product, quantity);
+        const wasAdded = await onAddToCart(product, quantity);
         if (wasAdded !== false) {
           onClose();
         }
       } catch (error) {
-        Alert.alert('Stock insuficiente', error.message);
+        Alert.alert('No se pudo agregar al carrito', error?.message || 'Inténtalo de nuevo.');
+      } finally {
+        setIsAddingToCart(false);
       }
     }
   };
@@ -255,7 +259,7 @@ const ProductDetailModal = ({
                   <TouchableOpacity
                     style={[styles.addToCartBtn, stock <= 0 && styles.addToCartDisabled]}
                     onPress={handleAddToCart}
-                    disabled={stock <= 0}
+                    disabled={stock <= 0 || isAddingToCart}
                   >
                     <Ionicons name="cart-outline" size={20} color={COLORS.white} style={{ marginRight: 6 }} />
                     <Text style={styles.addToCartText}>Agregar al carrito</Text>

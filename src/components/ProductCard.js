@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, Image, StyleSheet, TouchableOpacity, Alert } from 'react-native';
-import { useDispatch, useSelector } from 'react-redux';
-import { addToCart, calculateStockUsed } from '../redux/slices/cartSlice';
+import { useCart } from '../hooks/useCart';
+import { calculateStockUsed } from '../utils/cart';
 import COLORS from '../constants/colors';
 import theme from '../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,8 +14,7 @@ const getProductImage = (imageName) => {
 };
 
 const ProductCard = ({ product, onPress, onAddToCart }) => {
-  const dispatch = useDispatch();
-  const cartItems = useSelector((state) => state.cart?.items || []);
+  const { cartItems, addItem, isMutating } = useCart();
   const [quantity, setQuantity] = useState(1);
   const isCombo = Boolean(product?.isCombo || product?.type === 'combo');
   const productName = product?.name || product?.nombre || product?.nombre_combo || 'Producto';
@@ -37,9 +36,9 @@ const ProductCard = ({ product, onPress, onAddToCart }) => {
     }
   };
 
-  const handleAddToCart = () => {
+  const handleAddToCart = async () => {
     if (onAddToCart) {
-      onAddToCart(product, quantity);
+      await onAddToCart(product, quantity);
       return;
     }
 
@@ -47,7 +46,8 @@ const ProductCard = ({ product, onPress, onAddToCart }) => {
                       (product?.image ? { uri: product.image } : require('../assets/images/producto-default.jpg'));
     
     try {
-      dispatch(addToCart({
+      await addItem({
+        ...product,
         id: productId,
         name: productName,
         price: productPrice,
@@ -55,12 +55,11 @@ const ProductCard = ({ product, onPress, onAddToCart }) => {
         imageUrl: typeof product?.image === 'string' ? product.image : null,
         isCombo,
         comboProducts: product?.products || [],
-        quantity,
         stock: product?.stock ?? product?.existencia,
         existencia: product?.existencia ?? product?.stock,
-      }));
+      }, quantity);
     } catch (error) {
-      Alert.alert('Stock insuficiente', error.message);
+      Alert.alert('No se pudo agregar al carrito', error?.message || 'Inténtalo de nuevo.');
     }
   };
 
@@ -137,7 +136,7 @@ const ProductCard = ({ product, onPress, onAddToCart }) => {
         style={[styles.addButton, isOutOfStock && styles.addButtonDisabled]}
         onPress={handleAddToCart}
         activeOpacity={0.8}
-        disabled={isOutOfStock}
+        disabled={isOutOfStock || isMutating}
       >
         <Ionicons name="cart-outline" size={20} color={COLORS.white} />
         <Text style={styles.addButtonText}>{isCombo ? 'Combo' : 'Agregar al carrito'}</Text>
