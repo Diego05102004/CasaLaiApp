@@ -2,10 +2,18 @@ import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import HomeScreen from '../screens/main/HomeScreen';
+import AmazonStyleHomeScreen from '../screens/main/AmazonStyleHomeScreen';
 import ProductDetailScreen from '../screens/product/ProductDetailScreen';
 import PaymentScreen from '../screens/main/PaymentScreen';
 import COLORS from '../constants/colors';
 import ProfileScreen from '../screens/main/ProfileScreen';
+import CatalogScreen from '../screens/main/CatalogScreen';
+import ProductsScreen from '../screens/main/ProductsScreen';
+import ReceptionScreen from '../screens/main/ReceptionScreen';
+import IncomeExpenseScreen from '../screens/main/IncomeExpenseScreen';
+import UserManualScreen from '../screens/main/UserManualScreen';
+import SettingsScreen from '../screens/main/SettingsScreen';
+import HelpScreen from '../screens/main/HelpScreen';
 import { View } from 'react-native';
 
 const Stack = createStackNavigator();
@@ -33,7 +41,7 @@ const HomeStack = () => {
       <Stack.Screen name="Home">
         {() => (
           <SafeAreaWrapper>
-            <HomeScreen />
+            <AmazonStyleHomeScreen />
           </SafeAreaWrapper>
         )}
       </Stack.Screen>
@@ -62,12 +70,145 @@ const HomeStack = () => {
           headerBackTitle: 'Atrás',
         }}
       />
-      <Stack.Screen 
-        name="Profile" 
-        component={ProfileScreen} 
+      <Stack.Screen
+        name="Profile"
+        component={ProfileScreen}
         options={{
           headerShown: true,
           title: 'Mi Perfil',
+          headerBackTitle: 'Atrás',
+          headerStyle: {
+            backgroundColor: COLORS.primary,
+            elevation: 0,
+            shadowOpacity: 0,
+            borderBottomWidth: 0,
+          },
+          headerTintColor: COLORS.white,
+          headerTitleStyle: {
+            fontWeight: 'bold',
+          },
+        }}
+      />
+      <Stack.Screen
+        name="Catalog"
+        component={CatalogScreen}
+        options={{
+          headerShown: true,
+          title: 'Catálogo',
+          headerBackTitle: 'Atrás',
+          headerStyle: {
+            backgroundColor: COLORS.primary,
+            elevation: 0,
+            shadowOpacity: 0,
+            borderBottomWidth: 0,
+          },
+          headerTintColor: COLORS.white,
+          headerTitleStyle: {
+            fontWeight: 'bold',
+          },
+        }}
+      />
+      <Stack.Screen
+        name="Products"
+        component={ProductsScreen}
+        options={{
+          headerShown: true,
+          title: 'Productos',
+          headerBackTitle: 'Atrás',
+          headerStyle: {
+            backgroundColor: COLORS.primary,
+            elevation: 0,
+            shadowOpacity: 0,
+            borderBottomWidth: 0,
+          },
+          headerTintColor: COLORS.white,
+          headerTitleStyle: {
+            fontWeight: 'bold',
+          },
+        }}
+      />
+      <Stack.Screen
+        name="Reception"
+        component={ReceptionScreen}
+        options={{
+          headerShown: true,
+          title: 'Recepción',
+          headerBackTitle: 'Atrás',
+          headerStyle: {
+            backgroundColor: COLORS.primary,
+            elevation: 0,
+            shadowOpacity: 0,
+            borderBottomWidth: 0,
+          },
+          headerTintColor: COLORS.white,
+          headerTitleStyle: {
+            fontWeight: 'bold',
+          },
+        }}
+      />
+      <Stack.Screen
+        name="IncomeExpense"
+        component={IncomeExpenseScreen}
+        options={{
+          headerShown: true,
+          title: 'Ingresos y Egresos',
+          headerBackTitle: 'Atrás',
+          headerStyle: {
+            backgroundColor: COLORS.primary,
+            elevation: 0,
+            shadowOpacity: 0,
+            borderBottomWidth: 0,
+          },
+          headerTintColor: COLORS.white,
+          headerTitleStyle: {
+            fontWeight: 'bold',
+          },
+        }}
+      />
+      <Stack.Screen
+        name="UserManual"
+        component={UserManualScreen}
+        options={{
+          headerShown: true,
+          title: 'Manual de Usuario',
+          headerBackTitle: 'Atrás',
+          headerStyle: {
+            backgroundColor: COLORS.primary,
+            elevation: 0,
+            shadowOpacity: 0,
+            borderBottomWidth: 0,
+          },
+          headerTintColor: COLORS.white,
+          headerTitleStyle: {
+            fontWeight: 'bold',
+          },
+        }}
+      />
+      <Stack.Screen
+        name="Settings"
+        component={SettingsScreen}
+        options={{
+          headerShown: true,
+          title: 'Configuración',
+          headerBackTitle: 'Atrás',
+          headerStyle: {
+            backgroundColor: COLORS.primary,
+            elevation: 0,
+            shadowOpacity: 0,
+            borderBottomWidth: 0,
+          },
+          headerTintColor: COLORS.white,
+          headerTitleStyle: {
+            fontWeight: 'bold',
+          },
+        }}
+      />
+      <Stack.Screen
+        name="Help"
+        component={HelpScreen}
+        options={{
+          headerShown: true,
+          title: 'Ayuda',
           headerBackTitle: 'Atrás',
           headerStyle: {
             backgroundColor: COLORS.primary,

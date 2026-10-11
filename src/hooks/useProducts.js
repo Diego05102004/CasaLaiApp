@@ -19,43 +19,59 @@ const getProductImage = (imageName) => {
   return productImages[imageName] || productImages['default'];
 };
 
-const adaptProduct = (product) => ({
-  ...product,
-  id: Number(product.id_producto ?? product.id ?? 0),
-  name: product.nombre || product.name || 'Producto',
-  description: product.descripcion || product.description || '',
-  brand: product.marca || product.nombre_marca || product.marca_nombre || product.brand || '',
-  model: product.modelo || product.nombre_modelo || product.modelo_nombre || product.model || '',
-  features: product.caracteristicas || product.caracteristica || product.features || '',
-  price: Number(product.precio ?? product.price) || 0,
-  stock: Number(product.stock ?? product.existencia) || 0,
-  existencia: Number(product.stock ?? product.existencia) || 0,
-  category: product.categoria_nombre || product.categoria || product.category || String(product.categoria_id || 'otros'),
-  image: product.imagen || product.image || null,
-  imageSource: product.imagen ? { uri: product.imagen } : getProductImage(product.image),
-});
+const adaptProduct = (product) => {
+  // Corregir URLs de localhost a la IP
+  const fixImageUrl = (url) => {
+    if (!url) return null;
+    return url.replace(/http:\/\/localhost/g, 'http://192.168.1.108/CasaLai_Proyecto');
+  };
 
-const adaptCombo = (combo = {}) => ({
-  ...combo,
-  id: Number(combo.id_combo ?? combo.id ?? 0),
-  name: combo.nombre_combo || combo.nombre || combo.name || 'Combo',
-  description: combo.descripcion || combo.description || '',
-  price: Number(combo.precio_final ?? combo.precio_total ?? combo.precio ?? 0),
-  image: combo.imagen || combo.image || null,
-  imageSource: combo.imagen ? { uri: combo.imagen } : getProductImage(combo.image),
-  products: Array.isArray(combo.productos) ? combo.productos.map((product) => ({
+  return {
     ...product,
     id: Number(product.id_producto ?? product.id ?? 0),
-    name: product.nombre_producto || product.nombre || product.name || 'Producto',
-    quantity: Number(product.cantidad ?? product.quantity ?? 1),
-    price: Number(product.precio ?? product.price ?? 0),
+    name: product.nombre || product.name || 'Producto',
+    description: product.descripcion || product.description || '',
+    brand: product.marca || product.nombre_marca || product.marca_nombre || product.brand || '',
+    model: product.modelo || product.nombre_modelo || product.modelo_nombre || product.model || '',
+    features: product.caracteristicas || product.caracteristica || product.features || '',
+    price: Number(product.precio ?? product.price) || 0,
     stock: Number(product.stock ?? product.existencia) || 0,
     existencia: Number(product.stock ?? product.existencia) || 0,
-  })) : [],
-  category: 'combos',
-  type: 'combo',
-  isCombo: true,
-});
+    category: product.categoria_nombre || product.categoria || product.category || String(product.categoria_id || 'otros'),
+    image: fixImageUrl(product.imagen || product.image),
+    imageSource: fixImageUrl(product.imagen || product.image) ? { uri: fixImageUrl(product.imagen || product.image) } : getProductImage(product.image),
+  };
+};
+
+const adaptCombo = (combo = {}) => {
+  const fixImageUrl = (url) => {
+    if (!url) return null;
+    return url.replace(/http:\/\/localhost/g, 'http://192.168.1.108/CasaLai_Proyecto');
+  };
+
+  return {
+    ...combo,
+    id: Number(combo.id_combo ?? combo.id ?? 0),
+    name: combo.nombre_combo || combo.nombre || combo.name || 'Combo',
+    description: combo.descripcion || combo.description || '',
+    price: Number(combo.precio_final ?? combo.precio_total ?? combo.precio ?? 0),
+    image: fixImageUrl(combo.imagen || combo.image),
+    imageSource: fixImageUrl(combo.imagen || combo.image) ? { uri: fixImageUrl(combo.imagen || combo.image) } : getProductImage(combo.image),
+    products: Array.isArray(combo.productos) ? combo.productos.map((product) => ({
+      ...product,
+      id: Number(product.id_producto ?? product.id ?? 0),
+      name: product.nombre_producto || product.nombre || product.name || 'Producto',
+      quantity: Number(product.cantidad ?? product.quantity ?? 1),
+      price: Number(product.precio ?? product.price ?? 0),
+      stock: Number(product.stock ?? product.existencia) || 0,
+      existencia: Number(product.stock ?? product.existencia) || 0,
+      imagen: fixImageUrl(product.imagen),
+    })) : [],
+    category: 'combos',
+    type: 'combo',
+    isCombo: true,
+  };
+};
 
 const groupProductsByCategory = (products) => products.reduce((groups, product) => {
   const category = product.category.toLowerCase();

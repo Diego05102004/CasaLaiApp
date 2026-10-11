@@ -1,52 +1,189 @@
-import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { useDispatch, useSelector } from 'react-redux';
-import { fetchProducts } from '../../redux/slices/productSlice';
-import ProductCard from '../../components/ProductCard';
-import ComboCard from '../../components/ComboCard';
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  Image,
+  TouchableOpacity,
+  ActivityIndicator,
+  TextInput,
+  ScrollView,
+} from 'react-native';
+import { useProducts } from '../../hooks/useProducts';
+import { useCart } from '../../hooks/useCart';
+import { useSelector } from 'react-redux';
 import COLORS from '../../constants/colors';
 import theme from '../../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 
-const CatalogScreen = ({ navigation }) => {
-  const dispatch = useDispatch();
-  const { products, combos, loading, error } = useSelector((state) => state.products);
+const CatalogScreen = ({ route, navigation }) => {
+  const { category: categoryParam } = route.params || {};
+  const { products, loading } = useProducts();
+  const { addItem, updateItemQuantity, removeItem } = useCart();
+  const cartItems = useSelector((state) => state.cart.items);
+  const [searchQuery, setSearchQuery] = useState(categoryParam || '');
+  const [minPrice, setMinPrice] = useState('');
+  const [maxPrice, setMaxPrice] = useState('');
+  const [selectedBrand, setSelectedBrand] = useState('');
 
-  useEffect(() => {
-    dispatch(fetchProducts());
-  }, [dispatch]);
+  const allProducts = Object.values(products || {}).flat().filter(Boolean);
 
-  const catalogItems = [...(products || []), ...(combos || [])];
+  // Extraer marcas únicas
+  const brands = [...new Set(allProducts.map(p => p.brand || p.marca || p.marca_nombre).filter(Boolean))].sort();
 
-  const renderCatalogItem = ({ item }) => (
-    item?.isCombo || item?.type === 'combo'
-      ? <ComboCard combo={item} />
-      : <ProductCard product={item} />
-  );
+  // Filtrar productos - usa solo el buscador, no filtro por categoría fijo
+  const searchFilteredProducts = allProducts.filter((product) => {
+    const query = searchQuery.toLowerCase().trim();
+    const name = (product?.name || product?.nombre || '').toLowerCase();
+    const description = (product?.description || product?.descripcion || '').toLowerCase();
+    const category = (product?.category || product?.categoria_nombre || product?.categoria || '').toLowerCase();
+    const price = Number(product?.price || product?.precio || 0);
+    const brand = product?.brand || product?.marca || product?.marca_nombre || '';
 
-  const renderEmptyState = () => (
-    <View style={styles.emptyState}>
-      <Ionicons name="print-outline" size={60} color={COLORS.gray} />
-      <Text style={styles.emptyStateTitle}>No hay productos disponibles</Text>
-      <Text style={styles.emptyStateText}>No se encontraron productos ni combos en el catálogo</Text>
-    </View>
-  );
+    // Filtro por búsqueda (busca en nombre, descripción y categoría)
+    const matchesSearch = !query ||
+      name.includes(query) ||
+      description.includes(query) ||
+      category.includes(query);
 
-  const renderError = () => (
-    <View style={styles.errorState}>
-      <Ionicons name="alert-circle-outline" size={60} color={COLORS.danger} />
-      <Text style={styles.errorStateTitle}>Error al cargar productos</Text>
-      <Text style={styles.errorStateText}>{error}</Text>
-      <TouchableOpacity 
-        style={styles.retryButton}
-        onPress={() => dispatch(fetchProducts())}
-      >
-        <Text style={styles.retryButtonText}>Reintentar</Text>
-      </TouchableOpacity>
-    </View>
-  );
+    // Filtro por precio
+    const min = minPrice ? Number(minPrice) : null;
+    const max = maxPrice ? Number(maxPrice) : null;
+    const matchesPrice = (min === null || price >= min) && (max === null || price <= max);
 
-  if (loading && catalogItems.length === 0) {
+    // Filtro por marca
+    const matchesBrand = !selectedBrand || brand === selectedBrand;
+
+    return matchesSearch && matchesPrice && matchesBrand;
+  });
+
+  const getCartQuantity = (productId) => {
+    const item = cartItems.find((item) => item.id === productId);
+    return item ? item.quantity : 0;
+  };
+
+  const handleAddToCart = (product) => {
+    try {
+      addItem(product, 1);
+    } catch (error) {
+      console.error('Error al agregar al carrito:', error);
+    }
+  };
+
+  const handleIncreaseQuantity = (product) => {
+    const currentQty = getCartQuantity(product.id);
+    try {
+      updateItemQuantity(product.id, currentQty + 1);
+    } catch (error) {
+      console.error('Error al aumentar cantidad:', error);
+    }
+  };
+
+  const handleDecreaseQuantity = (product) => {
+    const currentQty = getCartQuantity(product.id);
+    if (currentQty > 1) {
+      try {
+        updateItemQuantity(product.id, currentQty - 1);
+      } catch (error) {
+        console.error('Error al disminuir cantidad:', error);
+      }
+    } else {
+      removeItem(product.id);
+    }
+  };
+
+  const renderProductCard = ({ item }) => {
+    const cartQuantity = getCartQuantity(item.id);
+    const stock = Number(item?.stock || item?.existencia || 0);
+    const isOutOfStock = stock === 0;
+
+    return (
+      <View style={styles.productCard}>
+        <View style={styles.productImageContainer}>
+          {item?.image || item?.imagen ? (
+            <Image
+              source={{ uri: item.image || item.imagen }}
+              style={styles.productImage}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={styles.productImagePlaceholder}>
+              <Ionicons name="image-outline" size={40} color={COLORS.textSecondary} />
+            </View>
+          )}
+          {isOutOfStock && (
+            <View style={styles.outOfStockBadge}>
+              <Text style={styles.outOfStockText}>Agotado</Text>
+            </View>
+          )}
+        </View>
+
+        <View style={styles.productInfo}>
+          <Text style={styles.productName} numberOfLines={2}>
+            {item?.name || item?.nombre || 'Producto'}
+          </Text>
+          <Text style={styles.productDescription} numberOfLines={2}>
+            {item?.description || item?.descripcion || 'Sin descripción'}
+          </Text>
+          <View style={styles.productMeta}>
+            <Ionicons name="cube-outline" size={14} color={COLORS.textSecondary} />
+            <Text style={[styles.stockText, isOutOfStock && styles.stockTextOut]}>
+              {stock} disponibles
+            </Text>
+          </View>
+          <Text style={styles.productPrice}>
+            ${Number(item?.price || item?.precio || 0).toFixed(2)}
+          </Text>
+        </View>
+
+        <View style={styles.productActions}>
+          {isOutOfStock ? (
+            <View style={styles.outOfStockButton}>
+              <Ionicons name="close-circle" size={20} color={COLORS.textSecondary} />
+              <Text style={styles.outOfStockButtonText}>Agotado</Text>
+            </View>
+          ) : cartQuantity === 0 ? (
+            <TouchableOpacity
+              style={styles.addButton}
+              onPress={() => handleAddToCart(item)}
+            >
+              <Ionicons name="cart-outline" size={20} color={COLORS.white} />
+              <Text style={styles.addButtonText}>Agregar</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.quantityContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.quantityButton,
+                  cartQuantity === 1 && styles.deleteButton
+                ]}
+                onPress={() => handleDecreaseQuantity(item)}
+              >
+                <Ionicons
+                  name={cartQuantity === 1 ? 'trash-outline' : 'remove-outline'}
+                  size={18}
+                  color={cartQuantity === 1 ? COLORS.danger : COLORS.primary}
+                />
+              </TouchableOpacity>
+              <Text style={styles.quantityText}>
+                {cartQuantity} en el carrito
+              </Text>
+              <TouchableOpacity
+                style={styles.quantityButton}
+                onPress={() => handleIncreaseQuantity(item)}
+                disabled={cartQuantity >= stock}
+              >
+                <Ionicons name="add-outline" size={18} color={COLORS.primary} />
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+      </View>
+    );
+  };
+
+  if (loading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={COLORS.primary} />
@@ -58,26 +195,97 @@ const CatalogScreen = ({ navigation }) => {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Catálogo</Text>
+        <View style={styles.searchBar}>
+          <Ionicons name="search" size={20} color={COLORS.textSecondary} style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Buscar productos..."
+            placeholderTextColor={COLORS.textSecondary}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+          {searchQuery ? (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Ionicons name="close-circle" size={20} color={COLORS.textSecondary} />
+            </TouchableOpacity>
+          ) : null}
+        </View>
         <Text style={styles.subtitle}>
-          {products.length} productos y {combos.length} combos disponibles
+          {searchFilteredProducts.length} productos disponibles
         </Text>
       </View>
 
-      {error ? (
-        renderError()
-      ) : catalogItems.length === 0 ? (
-        renderEmptyState()
+      {/* Filtros horizontales */}
+      <ScrollView
+        style={styles.filtersContainer}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+      >
+        {brands.length > 0 && (
+          <View style={styles.filterGroup}>
+            <Text style={styles.filterGroupLabel}>Marca:</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <TouchableOpacity
+                style={[styles.filterChip, !selectedBrand && styles.filterChipActive]}
+                onPress={() => setSelectedBrand('')}
+              >
+                <Text style={[styles.filterChipText, !selectedBrand && styles.filterChipTextActive]}>
+                  Todas
+                </Text>
+              </TouchableOpacity>
+              {brands.map((brand) => (
+                <TouchableOpacity
+                  key={brand}
+                  style={[styles.filterChip, selectedBrand === brand && styles.filterChipActive]}
+                  onPress={() => setSelectedBrand(brand)}
+                >
+                  <Text style={[styles.filterChipText, selectedBrand === brand && styles.filterChipTextActive]}>
+                    {brand}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        <View style={styles.priceFilterGroup}>
+          <Text style={styles.filterGroupLabel}>Precio:</Text>
+          <View style={styles.priceInputs}>
+            <TextInput
+              style={styles.priceInput}
+              placeholder="Min"
+              placeholderTextColor={COLORS.textSecondary}
+              value={minPrice}
+              onChangeText={setMinPrice}
+              keyboardType="decimal-pad"
+            />
+            <Text style={styles.priceSeparator}>-</Text>
+            <TextInput
+              style={styles.priceInput}
+              placeholder="Max"
+              placeholderTextColor={COLORS.textSecondary}
+              value={maxPrice}
+              onChangeText={setMaxPrice}
+              keyboardType="decimal-pad"
+            />
+          </View>
+        </View>
+      </ScrollView>
+
+      {searchFilteredProducts.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Ionicons name="search-outline" size={60} color={COLORS.textSecondary} />
+          <Text style={styles.emptyTitle}>No se encontraron productos</Text>
+          <Text style={styles.emptyText}>Intenta con otros filtros</Text>
+        </View>
       ) : (
         <FlatList
-          data={catalogItems}
-          renderItem={renderCatalogItem}
-          keyExtractor={(item) => `${item.type || 'product'}-${item.id}`}
-          contentContainerStyle={styles.listContent}
+          data={searchFilteredProducts}
+          renderItem={renderProductCard}
+          keyExtractor={(item) => `product-${item.id}`}
+          contentContainerStyle={styles.productList}
           numColumns={2}
           columnWrapperStyle={styles.row}
-          refreshing={loading}
-          onRefresh={() => dispatch(fetchProducts())}
         />
       )}
     </View>
@@ -88,6 +296,15 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 10,
+    color: COLORS.textSecondary,
   },
   header: {
     padding: theme.spacing.lg,
@@ -100,11 +317,92 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     marginBottom: theme.spacing.xs,
   },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.lightGray,
+    borderRadius: 8,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    marginBottom: theme.spacing.xs,
+  },
+  searchIcon: {
+    marginRight: theme.spacing.sm,
+  },
+  searchInput: {
+    flex: 1,
+    ...theme.typography.body,
+    color: COLORS.text,
+  },
   subtitle: {
     ...theme.typography.body,
     color: COLORS.textSecondary,
   },
-  listContent: {
+  filtersContainer: {
+    backgroundColor: COLORS.white,
+    paddingVertical: theme.spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.lightGray,
+  },
+  filterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    backgroundColor: COLORS.lightGray,
+    borderRadius: 20,
+    marginRight: theme.spacing.sm,
+    borderWidth: 1,
+    borderColor: COLORS.lightGray,
+  },
+  filterChipActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  filterChipText: {
+    ...theme.typography.caption,
+    color: COLORS.text,
+    marginLeft: theme.spacing.xs,
+  },
+  filterChipTextActive: {
+    color: COLORS.white,
+  },
+  filterGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: theme.spacing.md,
+  },
+  filterGroupLabel: {
+    ...theme.typography.caption,
+    color: COLORS.textSecondary,
+    fontWeight: 'bold',
+    marginRight: theme.spacing.sm,
+  },
+  priceFilterGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: theme.spacing.md,
+  },
+  priceInputs: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  priceInput: {
+    width: 60,
+    height: 32,
+    borderWidth: 1,
+    borderColor: COLORS.lightGray,
+    borderRadius: 6,
+    paddingHorizontal: theme.spacing.sm,
+    ...theme.typography.caption,
+    color: COLORS.text,
+    textAlign: 'center',
+  },
+  priceSeparator: {
+    marginHorizontal: theme.spacing.sm,
+    color: COLORS.textSecondary,
+  },
+  productList: {
     padding: theme.spacing.md,
   },
   row: {
@@ -113,24 +411,41 @@ const styles = StyleSheet.create({
   productCard: {
     flex: 1,
     backgroundColor: COLORS.white,
-    borderRadius: theme.radius.md,
+    borderRadius: 12,
     marginBottom: theme.spacing.md,
     marginHorizontal: theme.spacing.xs,
+    elevation: 2,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    overflow: 'hidden',
+    shadowRadius: 3,
   },
-  productImage: {
-    width: '100%',
+  productImageContainer: {
     height: 150,
     backgroundColor: COLORS.lightGray,
   },
+  productImage: {
+    width: '100%',
+    height: '100%',
+  },
   productImagePlaceholder: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  outOfStockBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  outOfStockText: {
+    color: COLORS.white,
+    fontSize: 12,
+    fontWeight: 'bold',
   },
   productInfo: {
     padding: theme.spacing.md,
@@ -138,7 +453,7 @@ const styles = StyleSheet.create({
   productName: {
     ...theme.typography.subtitle,
     color: COLORS.text,
-    fontWeight: '600',
+    fontWeight: 'bold',
     marginBottom: theme.spacing.xs,
   },
   productDescription: {
@@ -146,79 +461,90 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     marginBottom: theme.spacing.sm,
   },
-  productDetails: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  stockContainer: {
+  productMeta: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: theme.spacing.sm,
   },
   stockText: {
     ...theme.typography.caption,
     color: COLORS.textSecondary,
     marginLeft: 4,
   },
+  stockTextOut: {
+    color: COLORS.danger,
+  },
   productPrice: {
     ...theme.typography.subtitle,
     color: COLORS.primary,
     fontWeight: 'bold',
+    fontSize: 18,
   },
-  loadingContainer: {
-    flex: 1,
+  productActions: {
+    padding: theme.spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.lightGray,
+  },
+  addButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.primary,
+    paddingVertical: theme.spacing.sm,
+    borderRadius: 8,
+  },
+  addButtonText: {
+    ...theme.typography.bodyBold,
+    color: COLORS.white,
+    marginLeft: theme.spacing.sm,
+  },
+  outOfStockButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.lightGray,
+    paddingVertical: theme.spacing.sm,
+    borderRadius: 8,
+  },
+  outOfStockButtonText: {
+    ...theme.typography.bodyBold,
+    color: COLORS.textSecondary,
+    marginLeft: theme.spacing.sm,
+  },
+  quantityContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  quantityButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: COLORS.lightGray,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  loadingText: {
-    ...theme.typography.body,
-    color: COLORS.textSecondary,
-    marginTop: theme.spacing.md,
+  deleteButton: {
+    backgroundColor: 'rgba(220, 53, 69, 0.1)',
+  },
+  quantityText: {
+    ...theme.typography.caption,
+    color: COLORS.text,
+    fontWeight: 'bold',
   },
   emptyState: {
-    flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
     padding: theme.spacing.xl,
   },
-  emptyStateTitle: {
+  emptyTitle: {
     ...theme.typography.h3,
     color: COLORS.text,
     marginTop: theme.spacing.md,
   },
-  emptyStateText: {
+  emptyText: {
     ...theme.typography.body,
     color: COLORS.textSecondary,
     marginTop: theme.spacing.xs,
-    textAlign: 'center',
-  },
-  errorState: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: theme.spacing.xl,
-  },
-  errorStateTitle: {
-    ...theme.typography.h3,
-    color: COLORS.danger,
-    marginTop: theme.spacing.md,
-  },
-  errorStateText: {
-    ...theme.typography.body,
-    color: COLORS.textSecondary,
-    marginTop: theme.spacing.xs,
-    textAlign: 'center',
-  },
-  retryButton: {
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: theme.spacing.xl,
-    paddingVertical: theme.spacing.md,
-    borderRadius: theme.radius.md,
-    marginTop: theme.spacing.lg,
-  },
-  retryButtonText: {
-    ...theme.typography.bodyBold,
-    color: COLORS.white,
   },
 });
 

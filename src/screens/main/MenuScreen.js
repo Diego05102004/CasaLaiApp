@@ -28,11 +28,10 @@ const MenuScreen = () => {
   };
 
   const menuItems = [
-    { id: '1', title: 'Catálogo', icon: 'grid-outline' },
-    { id: '2', title: 'Mi Perfil', icon: 'person-outline' },
-    { id: '3', title: 'Mis Pedidos', icon: 'receipt-outline' },
-    { id: '4', title: 'Configuración', icon: 'settings-outline' },
-    { id: '5', title: 'Ayuda', icon: 'help-circle-outline' },
+    { id: '1', title: 'Catálogo', icon: 'grid-outline', screen: 'Catalog' },
+    { id: '2', title: 'Pagos', icon: 'card-outline', screen: 'Payment' },
+    { id: '3', title: 'Manual de Usuario', icon: 'book-outline', screen: 'UserManual' },
+    { id: '4', title: 'Configuración', icon: 'settings-outline', screen: 'Settings' },
   ];
 
   // Usar SafeAreaView solo si no estamos en web
@@ -48,16 +47,12 @@ const MenuScreen = () => {
         
         <ScrollView style={styles.menuList}>
           {menuItems.map((item) => (
-            <TouchableOpacity 
-              key={item.id} 
+            <TouchableOpacity
+              key={item.id}
               style={styles.menuItem}
               onPress={() => {
-                if (item.id === '1') {
-                  navigation.navigate('Catalog');
-                } else if (item.id === '2') {
-                  navigation.navigate('Profile');
-                } else if (item.id === '3') {
-                  navigation.navigate('Pedidos');
+                if (item.screen) {
+                  navigation.navigate(item.screen);
                 }
               }}
             >

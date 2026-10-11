@@ -23,7 +23,6 @@ import ScreenWithHeader from '../../components/common/ScreenWithHeader';
 import { useProducts } from '../../hooks/useProducts';
 import { useCart } from '../../hooks/useCart';
 import { IMAGES } from '../../config/images';
-import MenuModal from '../../components/common/MenuModal';
 import { Ionicons } from '@expo/vector-icons';
 
 const normalizeFilterValue = (value) => String(value || '').trim().toLocaleLowerCase();
@@ -74,7 +73,6 @@ const HomeScreen = () => {
   const [brandFilter, setBrandFilter] = useState('');
   const [minimumPrice, setMinimumPrice] = useState('');
   const [maximumPrice, setMaximumPrice] = useState('');
-  const [menuVisible, setMenuVisible] = useState(false);
   const [selectedCombo, setSelectedCombo] = useState(null);
   const [comboModalVisible, setComboModalVisible] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -273,12 +271,6 @@ const HomeScreen = () => {
         </ImageBackground>
       </ScreenWithHeader>
 
-      <TouchableOpacity style={styles.menuButton} onPress={() => setMenuVisible(true)}>
-        <Ionicons name="menu" size={24} color={COLORS.white} />
-      </TouchableOpacity>
-
-      <MenuModal visible={menuVisible} onClose={() => setMenuVisible(false)} />
-
       <ComboDetailModal
         visible={comboModalVisible}
         combo={selectedCombo}
@@ -448,23 +440,6 @@ const styles = StyleSheet.create({
     marginTop: 10,
     color: COLORS.textSecondary,
     textAlign: 'center',
-  },
-  menuButton: {
-    position: 'absolute',
-    bottom: 20,
-    right: 20,
-    backgroundColor: COLORS.primary,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    zIndex: 1000,
   },
   loadingContainer: {
     flex: 1,

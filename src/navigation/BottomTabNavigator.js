@@ -1,11 +1,13 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useSelector } from 'react-redux';
 import HomeStack from './HomeStack';
 import CartScreen from '../screens/main/CartScreen';
 import PedidosScreen from '../screens/main/PedidosScreen';
+import ProfileScreen from '../screens/main/ProfileScreen';
+import MenuScreen from '../screens/main/MenuScreen';
 import COLORS from '../constants/colors';
 import theme from '../constants/theme';
 
@@ -16,15 +18,15 @@ const tabBarOptions = {
   tabBarActiveTintColor: COLORS.primary,
   tabBarInactiveTintColor: 'gray',
   headerShown: false,
+  tabBarShowLabel: false,
   tabBarStyle: {
     display: 'flex',
     borderTopWidth: 1,
     borderTopColor: '#e0e0e0',
     backgroundColor: '#fff',
-  },
-  tabBarLabelStyle: {
-    fontSize: 12,
-    marginBottom: 5,
+    height: 60,
+    paddingBottom: 5,
+    paddingTop: 5,
   },
 };
 
@@ -59,37 +61,60 @@ const CartIconWithBadge = ({ focused, color, size }) => {
 };
 
 const BottomTabNavigator = () => {
+  const [menuVisible, setMenuVisible] = useState(false);
+
   return (
-    <Tab.Navigator
-      screenOptions={({ route }) => ({
-        ...tabBarOptions,
-        tabBarIcon: ({ focused, color, size }) => {
-          if (route.name === 'Inicio') {
-            return (
-              <Ionicons
-                name={focused ? 'home' : 'home-outline'}
-                size={size}
-                color={color}
-              />
-            );
-          } else if (route.name === 'Pedidos') {
-            return (
-              <Ionicons
-                name={focused ? 'receipt' : 'receipt-outline'}
-                size={size}
-                color={color}
-              />
-            );
-          } else if (route.name === 'Carrito') {
-            return <CartIconWithBadge focused={focused} color={color} size={size} />;
-          }
-        },
-      })}
-    >
-      <Tab.Screen name="Inicio" component={HomeStack} />
-      <Tab.Screen name="Pedidos" component={PedidosScreen} />
-      <Tab.Screen name="Carrito" component={CartScreen} />
-    </Tab.Navigator>
+    <>
+      <Tab.Navigator
+        screenOptions={({ route, navigation }) => ({
+          ...tabBarOptions,
+          tabBarIcon: ({ focused, color }) => {
+            const iconSize = 28;
+            if (route.name === 'Inicio') {
+              return (
+                <Ionicons
+                  name={focused ? 'home' : 'home-outline'}
+                  size={iconSize}
+                  color={color}
+                />
+              );
+            } else if (route.name === 'Pedidos') {
+              return (
+                <Ionicons
+                  name={focused ? 'receipt' : 'receipt-outline'}
+                  size={iconSize}
+                  color={color}
+                />
+              );
+            } else if (route.name === 'Carrito') {
+              return <CartIconWithBadge focused={focused} color={color} size={iconSize} />;
+            } else if (route.name === 'Perfil') {
+              return (
+                <Ionicons
+                  name={focused ? 'person' : 'person-outline'}
+                  size={iconSize}
+                  color={color}
+                />
+              );
+            } else if (route.name === 'Menu') {
+              return (
+                <Ionicons
+                  name={focused ? 'menu' : 'menu-outline'}
+                  size={iconSize}
+                  color={color}
+                />
+              );
+            }
+          },
+        })}
+      >
+        <Tab.Screen name="Inicio" component={HomeStack} />
+        <Tab.Screen name="Pedidos" component={PedidosScreen} />
+        <Tab.Screen name="Carrito" component={CartScreen} />
+        <Tab.Screen name="Perfil" component={ProfileScreen} />
+        <Tab.Screen name="Menu" component={MenuScreen} />
+      </Tab.Navigator>
+    </>
   );
 };
 
