@@ -7,11 +7,12 @@ import {
   ScrollView, 
   TouchableOpacity, 
   Dimensions,
-  FlatList
+  FlatList,
+  Alert,
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
-import { addToCart } from '../../redux/slices/cartSlice';
 import { fetchProductById } from '../../redux/slices/productSlice';
+import { useCart } from '../../hooks/useCart';
 import COLORS from '../../constants/colors';
 import theme from '../../constants/theme';
 import ScreenWithHeader from '../../components/common/ScreenWithHeader';
@@ -53,22 +54,21 @@ const ProductDetailScreen = ({ route, navigation }) => {
   const [quantity, setQuantity] = useState(1);
   const dispatch = useDispatch();
   const { currentProduct: product, loading, error } = useSelector((state) => state.products);
+  const { addItem, isMutating } = useCart();
 
   useEffect(() => {
     console.log('[ProductDetail] Consultando producto:', productId);
     dispatch(fetchProductById(productId));
   }, [dispatch, productId]);
 
-  const handleAddToCart = () => {
+  const handleAddToCart = async () => {
     if (product) {
-      dispatch(addToCart({
-        ...product,
-        quantity,
-        totalPrice: product.price * quantity
-      }));
-      
-      // Mostrar feedback
-      alert(`¡${product.name} se ha añadido al carrito!`);
+      try {
+        await addItem(product, quantity);
+        Alert.alert('Producto agregado', `¡${product.name} se ha añadido al carrito!`);
+      } catch (requestError) {
+        Alert.alert('No se pudo agregar al carrito', requestError?.message || 'Inténtalo de nuevo.');
+      }
     }
   };
 
@@ -151,6 +151,7 @@ const ProductDetailScreen = ({ route, navigation }) => {
           <TouchableOpacity 
             style={styles.addToCartButton}
             onPress={handleAddToCart}
+            disabled={isMutating}
           >
             <Ionicons name="cart" size={20} color={COLORS.white} style={styles.cartIcon} />
             <Text style={styles.addToCartText}>Añadir al carrito</Text>

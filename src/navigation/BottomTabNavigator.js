@@ -2,7 +2,7 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { View, Text, StyleSheet } from 'react-native';
-import { useSelector } from 'react-redux';
+import { useCart } from '../hooks/useCart';
 import HomeStack from './HomeStack';
 import CartScreen from '../screens/main/CartScreen';
 import PedidosScreen from '../screens/main/PedidosScreen';
@@ -31,8 +31,8 @@ const tabBarOptions = {
 const Tab = createBottomTabNavigator();
 
 const CartIconWithBadge = ({ focused, color, size }) => {
-  const cartItems = useSelector(state => state.cart.items);
-  const itemCount = cartItems.reduce((total, item) => total + item.quantity, 0);
+  const { getItemCount } = useCart();
+  const itemCount = getItemCount();
 
   return (
     <View>

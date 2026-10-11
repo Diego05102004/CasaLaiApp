@@ -7,6 +7,7 @@ import { Provider, useDispatch, useSelector } from 'react-redux';
 import { PersistGate } from 'redux-persist/integration/react';
 import { NavigationContainer } from '@react-navigation/native';
 import { store, persistor } from './src/redux/store';
+import { CartProvider } from './src/context/CartContext';
 import AppNavigator from './src/navigation/AppNavigator';
 // import TestApiScreen from './src/components/TestApiScreen';
 import { checkAuth, refreshAuthSession } from './src/redux/slices/authSlice';
@@ -33,7 +34,11 @@ const AppContent = () => {
     );
   }
 
-  return <AppNavigator />;
+  return (
+    <CartProvider>
+      <AppNavigator />
+    </CartProvider>
+  );
   //return <TestApiScreen />;
 };
 

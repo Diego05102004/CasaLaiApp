@@ -10,16 +10,16 @@ import {
   Dimensions,
   Alert,
 } from 'react-native';
-import { useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
 import COLORS from '../constants/colors';
-import { calculateStockUsed } from '../redux/slices/cartSlice';
+import { useCart } from '../hooks/useCart';
+import { calculateStockUsed } from '../utils/cart';
 
 const { height } = Dimensions.get('window');
 const defaultImage = require('../assets/images/producto-default.jpg');
 
 const ComboDetailModal = ({ visible, combo, onClose, onAddToCart }) => {
-  const cartItems = useSelector((state) => state.cart?.items || []);
+  const { cartItems, isMutating } = useCart();
   const [quantity, setQuantity] = useState(1);
 
   // Extraer el nombre del combo
@@ -231,11 +231,11 @@ const ComboDetailModal = ({ visible, combo, onClose, onAddToCart }) => {
 
             <TouchableOpacity
               style={[styles.addButton, isOutOfStock && styles.addButtonDisabled]}
-              disabled={isOutOfStock}
-              onPress={() => {
+              disabled={isOutOfStock || isMutating}
+              onPress={async () => {
                 if (onAddToCart) {
                   try {
-                    const wasAdded = onAddToCart(combo, quantity);
+                    const wasAdded = await onAddToCart(combo, quantity);
                     if (wasAdded !== false) {
                       onClose();
                     }

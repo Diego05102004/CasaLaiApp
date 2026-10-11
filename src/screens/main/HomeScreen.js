@@ -117,16 +117,16 @@ const HomeScreen = () => {
       .sort((a, b) => getProductName(a).localeCompare(getProductName(b), 'es'));
   }, [allProducts, searchQuery, categoryFilter, brandFilter, minimumPrice, maximumPrice]);
 
-  const handleAddToCart = (product, quantity = 1) => {
+  const handleAddToCart = async (product, quantity = 1) => {
     try {
-      addItem(product, quantity);
+      await addItem(product, quantity);
       const name = getProductName(product);
       setSuccessMessage(
         `${quantity} ${quantity === 1 ? 'unidad agregada' : 'unidades agregadas'} de "${name}" al carrito.`
       );
       return true;
     } catch (error) {
-      Alert.alert('Stock insuficiente', error.message);
+      Alert.alert('No se pudo agregar al carrito', error?.message || 'Inténtalo de nuevo.');
       return false;
     }
   };

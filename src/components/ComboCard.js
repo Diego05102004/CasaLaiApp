@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, Image, StyleSheet, TouchableOpacity, Alert } from 'react-native';
-import { useDispatch, useSelector } from 'react-redux';
-import { addToCart, calculateStockUsed } from '../redux/slices/cartSlice';
+import { useCart } from '../hooks/useCart';
+import { calculateStockUsed } from '../utils/cart';
 import COLORS from '../constants/colors';
 import theme from '../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,8 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 const defaultImage = require('../assets/images/producto-default.jpg');
 
 const ComboCard = ({ combo, onPress, onAddToCart }) => {
-  const dispatch = useDispatch();
-  const cartItems = useSelector((state) => state.cart?.items || []);
+  const { cartItems, addItem, isMutating } = useCart();
   const [quantity, setQuantity] = useState(1);
   const name = combo?.name || combo?.nombre_combo || combo?.nombre || 'Combo';
   const price = Number(combo?.price ?? combo?.precio_final ?? combo?.precio_total ?? combo?.precio ?? 0);
@@ -57,12 +56,13 @@ const ComboCard = ({ combo, onPress, onAddToCart }) => {
   const getItemImage = (item) => item?.imageSource || (item?.imagen || item?.image ? { uri: item.imagen || item.image } : defaultImage);
   const imageSource = combo?.imageSource || (combo?.image ? { uri: combo.image } : getItemImage(items[0]));
 
-  const handleAddToCart = () => {
+  const handleAddToCart = async () => {
     if (onAddToCart) {
-      onAddToCart(combo, quantity);
+      await onAddToCart(combo, quantity);
     } else {
       try {
-        dispatch(addToCart({
+        await addItem({
+          ...combo,
           id: combo?.id,
           name,
           price,
@@ -70,12 +70,11 @@ const ComboCard = ({ combo, onPress, onAddToCart }) => {
           imageUrl: typeof combo?.image === 'string' ? combo.image : null,
           isCombo: true,
           comboProducts: items,
-          quantity,
           stock: combo?.stock ?? combo?.existencia,
           existencia: combo?.existencia ?? combo?.stock,
-        }));
+        }, quantity);
       } catch (error) {
-        Alert.alert('Stock insuficiente', error.message);
+        Alert.alert('No se pudo agregar al carrito', error?.message || 'Inténtalo de nuevo.');
       }
     }
   };
@@ -171,7 +170,7 @@ const ComboCard = ({ combo, onPress, onAddToCart }) => {
       <TouchableOpacity
         style={[styles.addButton, isOutOfStock && styles.addButtonDisabled]}
         onPress={handleAddToCart}
-        disabled={isOutOfStock}
+        disabled={isOutOfStock || isMutating}
       >
         <Ionicons name="cart-outline" size={20} color={COLORS.white} />
         <Text style={styles.addButtonText}>Agregar</Text>
