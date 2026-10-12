@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -10,22 +10,23 @@ import {
   TextInput,
   ScrollView,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { useProducts } from '../../hooks/useProducts';
 import { useCart } from '../../hooks/useCart';
-import { useSelector } from 'react-redux';
 import COLORS from '../../constants/colors';
 import theme from '../../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 
-const CatalogScreen = ({ route, navigation }) => {
+const CatalogScreen = ({ route }) => {
+  const navigation = useNavigation();
   const { category: categoryParam } = route.params || {};
   const { products, loading } = useProducts();
-  const { addItem, updateItemQuantity, removeItem } = useCart();
-  const cartItems = useSelector((state) => state.cart.items);
+  const { addItem, updateItemQuantity, removeItem, cartItems, error: cartError } = useCart();
   const [searchQuery, setSearchQuery] = useState(categoryParam || '');
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
   const [selectedBrand, setSelectedBrand] = useState('');
+  const [localCart, setLocalCart] = useState({});
 
   const allProducts = Object.values(products || {}).flat().filter(Boolean);
 
@@ -39,7 +40,7 @@ const CatalogScreen = ({ route, navigation }) => {
     const description = (product?.description || product?.descripcion || '').toLowerCase();
     const category = (product?.category || product?.categoria_nombre || product?.categoria || '').toLowerCase();
     const price = Number(product?.price || product?.precio || 0);
-    const brand = product?.brand || product?.marca || product?.marca_nombre || '';
+    const brand = product?.brand || p.marca || p.marca_nombre || '';
 
     // Filtro por búsqueda (busca en nombre, descripción y categoría)
     const matchesSearch = !query ||
@@ -59,15 +60,23 @@ const CatalogScreen = ({ route, navigation }) => {
   });
 
   const getCartQuantity = (productId) => {
-    const item = cartItems.find((item) => item.id === productId);
-    return item ? item.quantity : 0;
+    // Usar el carrito del CartContext si está disponible, si no usar local
+    if (cartItems && cartItems.length > 0) {
+      const item = cartItems.find((item) => item.id === productId);
+      return item ? item.quantity : 0;
+    }
+    return localCart[productId] || 0;
   };
 
   const handleAddToCart = (product) => {
     try {
       addItem(product, 1);
     } catch (error) {
-      console.error('Error al agregar al carrito:', error);
+      console.error('Error con API, usando carrito local:', error);
+      setLocalCart(prev => ({
+        ...prev,
+        [product.id]: (prev[product.id] || 0) + 1
+      }));
     }
   };
 
@@ -76,7 +85,11 @@ const CatalogScreen = ({ route, navigation }) => {
     try {
       updateItemQuantity(product.id, currentQty + 1);
     } catch (error) {
-      console.error('Error al aumentar cantidad:', error);
+      console.error('Error con API, usando carrito local:', error);
+      setLocalCart(prev => ({
+        ...prev,
+        [product.id]: currentQty + 1
+      }));
     }
   };
 
@@ -86,10 +99,23 @@ const CatalogScreen = ({ route, navigation }) => {
       try {
         updateItemQuantity(product.id, currentQty - 1);
       } catch (error) {
-        console.error('Error al disminuir cantidad:', error);
+        console.error('Error con API, usando carrito local:', error);
+        setLocalCart(prev => ({
+          ...prev,
+          [product.id]: currentQty - 1
+        }));
       }
     } else {
-      removeItem(product.id);
+      try {
+        removeItem(product.id);
+      } catch (error) {
+        console.error('Error con API, usando carrito local:', error);
+        setLocalCart(prev => {
+          const newCart = { ...prev };
+          delete newCart[product.id];
+          return newCart;
+        });
+      }
     }
   };
 
@@ -195,6 +221,9 @@ const CatalogScreen = ({ route, navigation }) => {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
+        <Text style={styles.title}>
+          {categoryParam ? categoryParam : 'Catálogo'}
+        </Text>
         <View style={styles.searchBar}>
           <Ionicons name="search" size={20} color={COLORS.textSecondary} style={styles.searchIcon} />
           <TextInput

@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { validateEmail, validatePassword } from '../../utils/validation';
 import { sanitizeForAPI } from '../../sanitization';
 import { InvocarMetodo } from '../../utils/comunicadorApi';
+import { secureGet } from '../../utils/api';
 import {
   clearStoredAuthSession,
   decodeJwtPayload,
@@ -239,7 +240,7 @@ export const loginUser = createAsyncThunk(
 
         if (userIdForProfile) {
           try {
-            const profileResponse = await api.secureGet('/perfil.php', { id_usuario: userIdForProfile });
+            const profileResponse = await secureGet('/perfil.php', { id_usuario: userIdForProfile });
             const profileData = profileResponse?.data?.usuario || profileResponse?.data?.user || profileResponse?.data || {};
 
             if (profileData && Object.keys(profileData).length > 0) {

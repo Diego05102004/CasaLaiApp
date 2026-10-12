@@ -1,13 +1,8 @@
 import React, { useState } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
-<<<<<<< HEAD
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { useSelector } from 'react-redux';
-=======
 import { View, Text, StyleSheet } from 'react-native';
 import { useCart } from '../hooks/useCart';
->>>>>>> 038b5040c80e6bc59746de2ff0cffb9537cb3fe3
 import HomeStack from './HomeStack';
 import CartScreen from '../screens/main/CartScreen';
 import PedidosScreen from '../screens/main/PedidosScreen';
@@ -43,15 +38,15 @@ const CartIconWithBadge = ({ focused, color, size }) => {
 
   return (
     <View>
-      <Ionicons 
-        name={focused ? 'cart' : 'cart-outline'} 
-        size={size} 
-        color={color} 
+      <Ionicons
+        name={focused ? 'cart' : 'cart-outline'}
+        size={size}
+        color={color}
       />
       {itemCount > 0 && (
         <View style={[
           styles.badge,
-          { 
+          {
             backgroundColor: COLORS.danger,
             borderColor: focused ? COLORS.background : COLORS.white
           }
