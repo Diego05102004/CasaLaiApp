@@ -1,33 +1,16 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useDispatch, useSelector } from 'react-redux';
-import { logoutUser } from '../../redux/slices/authSlice';
+import { useSelector } from 'react-redux';
 import COLORS from '../../constants/colors';
 import theme from '../../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
-import ConfirmModal from '../../components/common/ConfirmModal';
 
 const SettingsScreen = () => {
-  const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
-  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [notifications, setNotifications] = useState(true);
   const [darkMode, setDarkMode] = useState(false);
   const [autoLogin, setAutoLogin] = useState(false);
-
-  const handleLogout = () => {
-    setShowLogoutConfirm(true);
-  };
-
-  const confirmLogout = () => {
-    dispatch(logoutUser());
-    setShowLogoutConfirm(false);
-  };
-
-  const cancelLogout = () => {
-    setShowLogoutConfirm(false);
-  };
 
   const settingsSections = [
     {
@@ -81,20 +64,6 @@ const SettingsScreen = () => {
         },
       ],
     },
-    {
-      title: 'Cuenta',
-      items: [
-        {
-          id: 'logout',
-          title: 'Cerrar Sesión',
-          description: 'Cerrar sesión actual',
-          type: 'button',
-          icon: 'log-out-outline',
-          color: COLORS.danger,
-          onPress: handleLogout,
-        },
-      ],
-    },
   ];
 
   return (
@@ -144,16 +113,6 @@ const SettingsScreen = () => {
           </Text>
         </View>
       </ScrollView>
-
-      <ConfirmModal
-        visible={showLogoutConfirm}
-        title="Cerrar Sesión"
-        message="¿Estás seguro de que deseas cerrar sesión?"
-        onConfirm={confirmLogout}
-        onCancel={cancelLogout}
-        confirmText="Cerrar Sesión"
-        cancelText="Cancelar"
-      />
     </SafeAreaView>
   );
 };

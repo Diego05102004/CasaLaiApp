@@ -1,6 +1,8 @@
 import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { TouchableOpacity } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import HomeScreen from '../screens/main/HomeScreen';
 import AmazonStyleHomeScreen from '../screens/main/AmazonStyleHomeScreen';
 import ProductDetailScreen from '../screens/product/ProductDetailScreen';
@@ -21,13 +23,26 @@ const Stack = createStackNavigator();
 // Componente para envolver las pantallas con SafeAreaView
 const SafeAreaWrapper = ({ children }) => (
   <View style={{ flex: 1 }}>
-    <SafeAreaView 
+    <SafeAreaView
       style={{ flex: 1 }}
       edges={['right', 'left', 'top']}
     >
       {children}
     </SafeAreaView>
   </View>
+);
+
+// Botón de retroceder personalizado que navega a la pestaña Menu
+const BackToMenuButton = ({ navigation }) => (
+  <TouchableOpacity
+    onPress={() => {
+      // Navegar a la pestaña Menu del BottomTabNavigator
+      navigation.getParent()?.navigate('Menu');
+    }}
+    style={{ marginLeft: 10 }}
+  >
+    <Ionicons name="arrow-back" size={24} color={COLORS.white} />
+  </TouchableOpacity>
 );
 
 const HomeStack = () => {
@@ -92,7 +107,7 @@ const HomeStack = () => {
       <Stack.Screen
         name="Catalog"
         component={CatalogScreen}
-        options={{
+        options={({ navigation }) => ({
           headerShown: true,
           title: 'Catálogo',
           headerBackTitle: 'Atrás',
@@ -106,7 +121,9 @@ const HomeStack = () => {
           headerTitleStyle: {
             fontWeight: 'bold',
           },
-        }}
+          headerLeft: () => <BackToMenuButton navigation={navigation} />,
+          gestureEnabled: false,
+        })}
       />
       <Stack.Screen
         name="Products"
@@ -168,7 +185,7 @@ const HomeStack = () => {
       <Stack.Screen
         name="UserManual"
         component={UserManualScreen}
-        options={{
+        options={({ navigation }) => ({
           headerShown: true,
           title: 'Manual de Usuario',
           headerBackTitle: 'Atrás',
@@ -182,12 +199,14 @@ const HomeStack = () => {
           headerTitleStyle: {
             fontWeight: 'bold',
           },
-        }}
+          headerLeft: () => <BackToMenuButton navigation={navigation} />,
+          gestureEnabled: false,
+        })}
       />
       <Stack.Screen
         name="Settings"
         component={SettingsScreen}
-        options={{
+        options={({ navigation }) => ({
           headerShown: true,
           title: 'Configuración',
           headerBackTitle: 'Atrás',
@@ -201,12 +220,14 @@ const HomeStack = () => {
           headerTitleStyle: {
             fontWeight: 'bold',
           },
-        }}
+          headerLeft: () => <BackToMenuButton navigation={navigation} />,
+          gestureEnabled: false,
+        })}
       />
       <Stack.Screen
         name="Help"
         component={HelpScreen}
-        options={{
+        options={({ navigation }) => ({
           headerShown: true,
           title: 'Ayuda',
           headerBackTitle: 'Atrás',
@@ -220,7 +241,9 @@ const HomeStack = () => {
           headerTitleStyle: {
             fontWeight: 'bold',
           },
-        }}
+          headerLeft: () => <BackToMenuButton navigation={navigation} />,
+          gestureEnabled: false,
+        })}
       />
     </Stack.Navigator>
   );

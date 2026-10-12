@@ -622,6 +622,11 @@ const PedidosScreen = () => {
 
   return (
     <View style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Mis Pedidos</Text>
+        <Text style={styles.headerSubtitle}>Historial de tus compras</Text>
+      </View>
+
       {error ? (
         <View style={styles.errorBox}>
           <Text style={styles.errorText}>{error}</Text>
@@ -669,6 +674,21 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F5F7FA',
+  },
+  header: {
+    padding: 16,
+    backgroundColor: COLORS.primary,
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: COLORS.white,
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    color: COLORS.white,
+    opacity: 0.9,
+    marginTop: 4,
   },
   listContent: {
     paddingHorizontal: 12,

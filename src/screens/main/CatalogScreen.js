@@ -12,7 +12,6 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useProducts } from '../../hooks/useProducts';
-import { useCart } from '../../hooks/useCart';
 import COLORS from '../../constants/colors';
 import theme from '../../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,101 +20,77 @@ const CatalogScreen = ({ route }) => {
   const navigation = useNavigation();
   const { category: categoryParam } = route.params || {};
   const { products, loading } = useProducts();
-  const { addItem, updateItemQuantity, removeItem, cartItems, error: cartError } = useCart();
   const [searchQuery, setSearchQuery] = useState(categoryParam || '');
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
   const [selectedBrand, setSelectedBrand] = useState('');
   const [localCart, setLocalCart] = useState({});
 
+  console.log('CatalogScreen render:', { categoryParam, loading, productsCount: Object.keys(products || {}).length });
+
   const allProducts = Object.values(products || {}).flat().filter(Boolean);
+  console.log('allProducts:', allProducts.length);
 
   // Extraer marcas únicas
   const brands = [...new Set(allProducts.map(p => p.brand || p.marca || p.marca_nombre).filter(Boolean))].sort();
 
-  // Filtrar productos - usa solo el buscador, no filtro por categoría fijo
+  // Filtrar productos
   const searchFilteredProducts = allProducts.filter((product) => {
     const query = searchQuery.toLowerCase().trim();
     const name = (product?.name || product?.nombre || '').toLowerCase();
     const description = (product?.description || product?.descripcion || '').toLowerCase();
     const category = (product?.category || product?.categoria_nombre || product?.categoria || '').toLowerCase();
     const price = Number(product?.price || product?.precio || 0);
-    const brand = product?.brand || p.marca || p.marca_nombre || '';
+    const brand = product?.brand || product?.marca || product?.marca_nombre || '';
 
-    // Filtro por búsqueda (busca en nombre, descripción y categoría)
     const matchesSearch = !query ||
       name.includes(query) ||
       description.includes(query) ||
       category.includes(query);
 
-    // Filtro por precio
     const min = minPrice ? Number(minPrice) : null;
     const max = maxPrice ? Number(maxPrice) : null;
     const matchesPrice = (min === null || price >= min) && (max === null || price <= max);
 
-    // Filtro por marca
     const matchesBrand = !selectedBrand || brand === selectedBrand;
 
     return matchesSearch && matchesPrice && matchesBrand;
   });
 
+  console.log('searchFilteredProducts:', searchFilteredProducts.length);
+
   const getCartQuantity = (productId) => {
-    // Usar el carrito del CartContext si está disponible, si no usar local
-    if (cartItems && cartItems.length > 0) {
-      const item = cartItems.find((item) => item.id === productId);
-      return item ? item.quantity : 0;
-    }
     return localCart[productId] || 0;
   };
 
   const handleAddToCart = (product) => {
-    try {
-      addItem(product, 1);
-    } catch (error) {
-      console.error('Error con API, usando carrito local:', error);
-      setLocalCart(prev => ({
-        ...prev,
-        [product.id]: (prev[product.id] || 0) + 1
-      }));
-    }
+    setLocalCart(prev => ({
+      ...prev,
+      [product.id]: (prev[product.id] || 0) + 1
+    }));
   };
 
   const handleIncreaseQuantity = (product) => {
     const currentQty = getCartQuantity(product.id);
-    try {
-      updateItemQuantity(product.id, currentQty + 1);
-    } catch (error) {
-      console.error('Error con API, usando carrito local:', error);
-      setLocalCart(prev => ({
-        ...prev,
-        [product.id]: currentQty + 1
-      }));
-    }
+    setLocalCart(prev => ({
+      ...prev,
+      [product.id]: currentQty + 1
+    }));
   };
 
   const handleDecreaseQuantity = (product) => {
     const currentQty = getCartQuantity(product.id);
     if (currentQty > 1) {
-      try {
-        updateItemQuantity(product.id, currentQty - 1);
-      } catch (error) {
-        console.error('Error con API, usando carrito local:', error);
-        setLocalCart(prev => ({
-          ...prev,
-          [product.id]: currentQty - 1
-        }));
-      }
+      setLocalCart(prev => ({
+        ...prev,
+        [product.id]: currentQty - 1
+      }));
     } else {
-      try {
-        removeItem(product.id);
-      } catch (error) {
-        console.error('Error con API, usando carrito local:', error);
-        setLocalCart(prev => {
-          const newCart = { ...prev };
-          delete newCart[product.id];
-          return newCart;
-        });
-      }
+      setLocalCart(prev => {
+        const newCart = { ...prev };
+        delete newCart[product.id];
+        return newCart;
+      });
     }
   };
 
@@ -221,9 +196,6 @@ const CatalogScreen = ({ route }) => {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>
-          {categoryParam ? categoryParam : 'Catálogo'}
-        </Text>
         <View style={styles.searchBar}>
           <Ionicons name="search" size={20} color={COLORS.textSecondary} style={styles.searchIcon} />
           <TextInput
