@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -10,29 +10,31 @@ import {
   TextInput,
   ScrollView,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { useProducts } from '../../hooks/useProducts';
-import { useCart } from '../../hooks/useCart';
-import { useSelector } from 'react-redux';
 import COLORS from '../../constants/colors';
 import theme from '../../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 
-const CatalogScreen = ({ route, navigation }) => {
+const CatalogScreen = ({ route }) => {
+  const navigation = useNavigation();
   const { category: categoryParam } = route.params || {};
   const { products, loading } = useProducts();
-  const { addItem, updateItemQuantity, removeItem } = useCart();
-  const cartItems = useSelector((state) => state.cart.items);
   const [searchQuery, setSearchQuery] = useState(categoryParam || '');
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
   const [selectedBrand, setSelectedBrand] = useState('');
+  const [localCart, setLocalCart] = useState({});
+
+  console.log('CatalogScreen render:', { categoryParam, loading, productsCount: Object.keys(products || {}).length });
 
   const allProducts = Object.values(products || {}).flat().filter(Boolean);
+  console.log('allProducts:', allProducts.length);
 
   // Extraer marcas únicas
   const brands = [...new Set(allProducts.map(p => p.brand || p.marca || p.marca_nombre).filter(Boolean))].sort();
 
-  // Filtrar productos - usa solo el buscador, no filtro por categoría fijo
+  // Filtrar productos
   const searchFilteredProducts = allProducts.filter((product) => {
     const query = searchQuery.toLowerCase().trim();
     const name = (product?.name || product?.nombre || '').toLowerCase();
@@ -41,55 +43,54 @@ const CatalogScreen = ({ route, navigation }) => {
     const price = Number(product?.price || product?.precio || 0);
     const brand = product?.brand || product?.marca || product?.marca_nombre || '';
 
-    // Filtro por búsqueda (busca en nombre, descripción y categoría)
     const matchesSearch = !query ||
       name.includes(query) ||
       description.includes(query) ||
       category.includes(query);
 
-    // Filtro por precio
     const min = minPrice ? Number(minPrice) : null;
     const max = maxPrice ? Number(maxPrice) : null;
     const matchesPrice = (min === null || price >= min) && (max === null || price <= max);
 
-    // Filtro por marca
     const matchesBrand = !selectedBrand || brand === selectedBrand;
 
     return matchesSearch && matchesPrice && matchesBrand;
   });
 
+  console.log('searchFilteredProducts:', searchFilteredProducts.length);
+
   const getCartQuantity = (productId) => {
-    const item = cartItems.find((item) => item.id === productId);
-    return item ? item.quantity : 0;
+    return localCart[productId] || 0;
   };
 
   const handleAddToCart = (product) => {
-    try {
-      addItem(product, 1);
-    } catch (error) {
-      console.error('Error al agregar al carrito:', error);
-    }
+    setLocalCart(prev => ({
+      ...prev,
+      [product.id]: (prev[product.id] || 0) + 1
+    }));
   };
 
   const handleIncreaseQuantity = (product) => {
     const currentQty = getCartQuantity(product.id);
-    try {
-      updateItemQuantity(product.id, currentQty + 1);
-    } catch (error) {
-      console.error('Error al aumentar cantidad:', error);
-    }
+    setLocalCart(prev => ({
+      ...prev,
+      [product.id]: currentQty + 1
+    }));
   };
 
   const handleDecreaseQuantity = (product) => {
     const currentQty = getCartQuantity(product.id);
     if (currentQty > 1) {
-      try {
-        updateItemQuantity(product.id, currentQty - 1);
-      } catch (error) {
-        console.error('Error al disminuir cantidad:', error);
-      }
+      setLocalCart(prev => ({
+        ...prev,
+        [product.id]: currentQty - 1
+      }));
     } else {
-      removeItem(product.id);
+      setLocalCart(prev => {
+        const newCart = { ...prev };
+        delete newCart[product.id];
+        return newCart;
+      });
     }
   };
 

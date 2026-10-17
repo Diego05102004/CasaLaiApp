@@ -38,15 +38,15 @@ const CartIconWithBadge = ({ focused, color, size }) => {
 
   return (
     <View>
-      <Ionicons 
-        name={focused ? 'cart' : 'cart-outline'} 
-        size={size} 
-        color={color} 
+      <Ionicons
+        name={focused ? 'cart' : 'cart-outline'}
+        size={size}
+        color={color}
       />
       {itemCount > 0 && (
         <View style={[
           styles.badge,
-          { 
+          {
             backgroundColor: COLORS.danger,
             borderColor: focused ? COLORS.background : COLORS.white
           }
