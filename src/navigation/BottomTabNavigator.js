@@ -1,13 +1,8 @@
 import React, { useState } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
-<<<<<<< HEAD
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { useSelector } from 'react-redux';
-=======
 import { View, Text, StyleSheet } from 'react-native';
 import { useCart } from '../hooks/useCart';
->>>>>>> 038b5040c80e6bc59746de2ff0cffb9537cb3fe3
 import HomeStack from './HomeStack';
 import CartScreen from '../screens/main/CartScreen';
 import PedidosScreen from '../screens/main/PedidosScreen';

@@ -66,7 +66,7 @@ const FilterOptions = ({ label, options, selectedValue, onSelect }) => (
 );
 
 const HomeScreen = () => {
-  const { products, loading } = useProducts();
+  const { products, loading, error, refetch } = useProducts();
   const { addItem } = useCart();
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
@@ -182,6 +182,18 @@ const HomeScreen = () => {
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={COLORS.primary} />
         <Text style={styles.loadingText}>Cargando productos...</Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text style={styles.errorTitle}>No se pudo cargar el catálogo</Text>
+        <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={refetch}>
+          <Text style={styles.retryButtonText}>Reintentar</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -449,6 +461,28 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 10,
+  },
+  errorTitle: {
+    color: COLORS.darkGray,
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  errorText: {
+    color: COLORS.textSecondary,
+    marginTop: 8,
+    textAlign: 'center',
+    paddingHorizontal: 24,
+  },
+  retryButton: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 8,
+    marginTop: 16,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+  },
+  retryButtonText: {
+    color: COLORS.white,
+    fontWeight: '700',
   },
   successOverlay: {
     flex: 1,

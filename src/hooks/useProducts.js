@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { InvocarMetodo } from '../utils/comunicadorApi';
+import { API_BASE_URL } from '../config/apiConfig';
 
 // Mapeo de imágenes de productos
 const productImages = {
@@ -20,10 +21,10 @@ const getProductImage = (imageName) => {
 };
 
 const adaptProduct = (product) => {
-  // Corregir URLs de localhost a la IP
   const fixImageUrl = (url) => {
-    if (!url) return null;
-    return url.replace(/http:\/\/localhost/g, 'http://192.168.1.108/CasaLai_Proyecto');
+    if (typeof url !== 'string' || !url.trim()) return null;
+    const serverRoot = API_BASE_URL.replace(/\/api\/?$/i, '');
+    return url.trim().replace(/^https?:\/\/localhost(?::\d+)?/i, serverRoot);
   };
 
   return {
@@ -45,8 +46,9 @@ const adaptProduct = (product) => {
 
 const adaptCombo = (combo = {}) => {
   const fixImageUrl = (url) => {
-    if (!url) return null;
-    return url.replace(/http:\/\/localhost/g, 'http://192.168.1.108/CasaLai_Proyecto');
+    if (typeof url !== 'string' || !url.trim()) return null;
+    const serverRoot = API_BASE_URL.replace(/\/api\/?$/i, '');
+    return url.trim().replace(/^https?:\/\/localhost(?::\d+)?/i, serverRoot);
   };
 
   return {
@@ -230,9 +232,15 @@ export const useProducts = () => {
   const [products, setProducts] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
+    let isActive = true;
+
     const fetchProducts = async () => {
+      setLoading(true);
+      setError(null);
+
       try {
         console.log('[useProducts] Consultando productos en la API');
         const response = await InvocarMetodo('productos.php', 'default');
@@ -253,18 +261,30 @@ export const useProducts = () => {
           combos: adaptedCombos.length,
           categorias: Object.keys(groupedProducts),
         });
-        setProducts(groupedProducts);
+        if (isActive) {
+          setProducts(groupedProducts);
+        }
       } catch (err) {
         const message = err?.message || 'Error al cargar los productos';
-        setError(message);
         console.error('[useProducts] Error al cargar productos desde la API:', err);
+        if (isActive) {
+          setError(message);
+        }
       } finally {
-        setLoading(false);
+        if (isActive) {
+          setLoading(false);
+        }
       }
     };
 
     fetchProducts();
-  }, []);
+
+    return () => {
+      isActive = false;
+    };
+  }, [reloadKey]);
+
+  const refetch = () => setReloadKey((currentKey) => currentKey + 1);
 
   const filterProducts = (query, productsToFilter) => {
     if (!query) return productsToFilter;
@@ -284,6 +304,7 @@ export const useProducts = () => {
     products, 
     loading, 
     error, 
+    refetch,
     filterProducts 
   };
 };
