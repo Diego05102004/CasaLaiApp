@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { InvocarMetodo } from '../utils/comunicadorApi';
-import { API_BASE_URL } from '../config/apiConfig';
+import { buildProductImageUrl } from '../config/apiConfig';
 
 // Mapeo de imágenes de productos
 const productImages = {
@@ -16,16 +16,33 @@ const productImages = {
 };
 
 // Función para obtener la imagen de un producto
-const getProductImage = (imageName) => {
-  return productImages[imageName] || productImages['default'];
+const resolveProductImage = (imageValue) => {
+  if (typeof imageValue !== 'string' || !imageValue.trim()) {
+    return {
+      image: null,
+      imageSource: productImages.default,
+    };
+  }
+
+  const value = imageValue.trim();
+  const localImage = productImages[value];
+  if (localImage) {
+    return {
+      image: value,
+      imageSource: localImage,
+    };
+  }
+
+  const imageUrl = buildProductImageUrl(value);
+
+  return {
+    image: imageUrl,
+    imageSource: { uri: imageUrl },
+  };
 };
 
 const adaptProduct = (product) => {
-  const fixImageUrl = (url) => {
-    if (typeof url !== 'string' || !url.trim()) return null;
-    const serverRoot = API_BASE_URL.replace(/\/api\/?$/i, '');
-    return url.trim().replace(/^https?:\/\/localhost(?::\d+)?/i, serverRoot);
-  };
+  const image = resolveProductImage(product.imagen || product.image);
 
   return {
     ...product,
@@ -39,17 +56,12 @@ const adaptProduct = (product) => {
     stock: Number(product.stock ?? product.existencia) || 0,
     existencia: Number(product.stock ?? product.existencia) || 0,
     category: product.categoria_nombre || product.categoria || product.category || String(product.categoria_id || 'otros'),
-    image: fixImageUrl(product.imagen || product.image),
-    imageSource: fixImageUrl(product.imagen || product.image) ? { uri: fixImageUrl(product.imagen || product.image) } : getProductImage(product.image),
+    ...image,
   };
 };
 
 const adaptCombo = (combo = {}) => {
-  const fixImageUrl = (url) => {
-    if (typeof url !== 'string' || !url.trim()) return null;
-    const serverRoot = API_BASE_URL.replace(/\/api\/?$/i, '');
-    return url.trim().replace(/^https?:\/\/localhost(?::\d+)?/i, serverRoot);
-  };
+  const image = resolveProductImage(combo.imagen || combo.image);
 
   return {
     ...combo,
@@ -57,8 +69,7 @@ const adaptCombo = (combo = {}) => {
     name: combo.nombre_combo || combo.nombre || combo.name || 'Combo',
     description: combo.descripcion || combo.description || '',
     price: Number(combo.precio_final ?? combo.precio_total ?? combo.precio ?? 0),
-    image: fixImageUrl(combo.imagen || combo.image),
-    imageSource: fixImageUrl(combo.imagen || combo.image) ? { uri: fixImageUrl(combo.imagen || combo.image) } : getProductImage(combo.image),
+    ...image,
     products: Array.isArray(combo.productos) ? combo.productos.map((product) => ({
       ...product,
       id: Number(product.id_producto ?? product.id ?? 0),
@@ -67,7 +78,7 @@ const adaptCombo = (combo = {}) => {
       price: Number(product.precio ?? product.price ?? 0),
       stock: Number(product.stock ?? product.existencia) || 0,
       existencia: Number(product.stock ?? product.existencia) || 0,
-      imagen: fixImageUrl(product.imagen),
+      imagen: resolveProductImage(product.imagen).image,
     })) : [],
     category: 'combos',
     type: 'combo',

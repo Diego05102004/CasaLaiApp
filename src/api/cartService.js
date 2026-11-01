@@ -1,4 +1,4 @@
-import { API_BASE_URL } from '../config/apiConfig';
+import { buildProductImageUrl } from '../config/apiConfig';
 import { secureGet, securePost } from '../utils/api';
 
 const ensureSuccess = (response) => {
@@ -14,18 +14,7 @@ const normalizeImageUrl = (image) => {
     return null;
   }
 
-  const value = image.trim().replace(/\\/g, '/');
-  if (!value) {
-    return null;
-  }
-
-  if (/^https?:\/\//i.test(value)) {
-    return value;
-  }
-
-  const apiRoot = API_BASE_URL.replace(/\/api\/?$/i, '');
-  const assetPath = value.replace(/^\.?\//, '').replace(/^assets\/img\/productos\//i, '');
-  return `${apiRoot}/assets/img/productos/${encodeURIComponent(assetPath)}`;
+  return buildProductImageUrl(image);
 };
 
 const normalizeCart = (data) => {

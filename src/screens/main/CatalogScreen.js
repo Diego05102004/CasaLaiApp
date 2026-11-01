@@ -9,9 +9,11 @@ import {
   ActivityIndicator,
   TextInput,
   ScrollView,
+  Alert,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useProducts } from '../../hooks/useProducts';
+import { useCart } from '../../hooks/useCart';
 import COLORS from '../../constants/colors';
 import theme from '../../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,11 +22,11 @@ const CatalogScreen = ({ route }) => {
   const navigation = useNavigation();
   const { category: categoryParam } = route.params || {};
   const { products, loading } = useProducts();
+  const { items: cartItems, addItem, updateItemQuantity, isMutating } = useCart();
   const [searchQuery, setSearchQuery] = useState(categoryParam || '');
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
   const [selectedBrand, setSelectedBrand] = useState('');
-  const [localCart, setLocalCart] = useState({});
 
   console.log('CatalogScreen render:', { categoryParam, loading, productsCount: Object.keys(products || {}).length });
 
@@ -59,38 +61,41 @@ const CatalogScreen = ({ route }) => {
 
   console.log('searchFilteredProducts:', searchFilteredProducts.length);
 
-  const getCartQuantity = (productId) => {
-    return localCart[productId] || 0;
+  const getCartItems = (productId) => {
+    return cartItems.filter((cartItem) => (
+      Number(cartItem.id_producto ?? cartItem.id) === Number(productId)
+    ));
   };
 
-  const handleAddToCart = (product) => {
-    setLocalCart(prev => ({
-      ...prev,
-      [product.id]: (prev[product.id] || 0) + 1
-    }));
+  const getCartQuantity = (productId) => getCartItems(productId)
+    .reduce((quantity, cartItem) => quantity + Number(cartItem.quantity || 0), 0);
+
+  const handleAddToCart = async (product) => {
+    try {
+      await addItem(product);
+    } catch (error) {
+      Alert.alert('No se pudo agregar al carrito', error?.message || 'Inténtalo de nuevo.');
+    }
   };
 
-  const handleIncreaseQuantity = (product) => {
-    const currentQty = getCartQuantity(product.id);
-    setLocalCart(prev => ({
-      ...prev,
-      [product.id]: currentQty + 1
-    }));
+  const handleIncreaseQuantity = async (product) => {
+    try {
+      await addItem(product);
+    } catch (error) {
+      Alert.alert('No se pudo actualizar la cantidad', error?.message || 'Inténtalo de nuevo.');
+    }
   };
 
-  const handleDecreaseQuantity = (product) => {
-    const currentQty = getCartQuantity(product.id);
-    if (currentQty > 1) {
-      setLocalCart(prev => ({
-        ...prev,
-        [product.id]: currentQty - 1
-      }));
-    } else {
-      setLocalCart(prev => {
-        const newCart = { ...prev };
-        delete newCart[product.id];
-        return newCart;
-      });
+  const handleDecreaseQuantity = async (product) => {
+    const [cartItem] = getCartItems(product.id);
+    if (!cartItem) {
+      return;
+    }
+
+    try {
+      await updateItemQuantity(cartItem.cartItemId, Number(cartItem.quantity) - 1);
+    } catch (error) {
+      Alert.alert('No se pudo actualizar la cantidad', error?.message || 'Inténtalo de nuevo.');
     }
   };
 
@@ -102,9 +107,9 @@ const CatalogScreen = ({ route }) => {
     return (
       <View style={styles.productCard}>
         <View style={styles.productImageContainer}>
-          {item?.image || item?.imagen ? (
+          {item?.imageSource ? (
             <Image
-              source={{ uri: item.image || item.imagen }}
+              source={item.imageSource}
               style={styles.productImage}
               resizeMode="cover"
             />
@@ -148,6 +153,7 @@ const CatalogScreen = ({ route }) => {
             <TouchableOpacity
               style={styles.addButton}
               onPress={() => handleAddToCart(item)}
+              disabled={isMutating}
             >
               <Ionicons name="cart-outline" size={20} color={COLORS.white} />
               <Text style={styles.addButtonText}>Agregar</Text>
@@ -160,6 +166,7 @@ const CatalogScreen = ({ route }) => {
                   cartQuantity === 1 && styles.deleteButton
                 ]}
                 onPress={() => handleDecreaseQuantity(item)}
+                disabled={isMutating}
               >
                 <Ionicons
                   name={cartQuantity === 1 ? 'trash-outline' : 'remove-outline'}
@@ -173,7 +180,7 @@ const CatalogScreen = ({ route }) => {
               <TouchableOpacity
                 style={styles.quantityButton}
                 onPress={() => handleIncreaseQuantity(item)}
-                disabled={cartQuantity >= stock}
+                disabled={isMutating || cartQuantity >= stock}
               >
                 <Ionicons name="add-outline" size={18} color={COLORS.primary} />
               </TouchableOpacity>

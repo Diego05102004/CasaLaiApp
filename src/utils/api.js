@@ -255,6 +255,48 @@ export const secureDelete = async (endpoint, params = {}, schema = null) => {
 };
 
 /**
+ * Descifra campos sensibles de la respuesta de la API
+ * @param {Object} data - Datos a descifrar
+ * @returns {Object} - Datos con campos descifrados
+ */
+const decryptResponseData = (data) => {
+  if (!data || typeof data !== 'object') {
+    return data;
+  }
+
+  try {
+    // Si es un array, procesar cada elemento
+    if (Array.isArray(data)) {
+      return data.map(item => decryptResponseData(item));
+    }
+
+    // Si es un objeto, descifrar campos sensibles
+    const fieldsToDecrypt = getFieldsToEncrypt(data);
+    
+    if (fieldsToDecrypt.length > 0) {
+      console.log('[API] Descifrando campos sensibles de la respuesta:', fieldsToDecrypt);
+      const decrypted = encryption.decryptArray(data, fieldsToDecrypt);
+      console.log('[API] Datos descifrados exitosamente');
+      return decrypted;
+    }
+
+    // Recursivamente procesar objetos anidados
+    const result = { ...data };
+    for (const key in result) {
+      if (typeof result[key] === 'object' && result[key] !== null) {
+        result[key] = decryptResponseData(result[key]);
+      }
+    }
+
+    return result;
+  } catch (error) {
+    console.error('[API] Error descifrando datos de respuesta:', error);
+    // En caso de error, retornar datos originales
+    return data;
+  }
+};
+
+/**
  * Maneja la respuesta de la API
  * @param {Response} response - Respuesta de fetch
  * @returns {Promise} - Datos de la respuesta
@@ -262,15 +304,15 @@ export const secureDelete = async (endpoint, params = {}, schema = null) => {
 const handleResponse = async (response) => {
   try {
     const contentType = response.headers.get('content-type');
-    
+
     console.log('API Response status:', response.status);
     console.log('API Response ok:', response.ok);
     console.log('API Response contentType:', contentType);
-    
+
     if (contentType && contentType.includes('application/json')) {
       const data = await response.json();
-      console.log('API Response data:', data);
-      
+      console.log('API Response data (raw):', data);
+
       if (!response.ok) {
         throw new APIError(
           data.message || data.error || 'Error en la petición',
@@ -278,10 +320,14 @@ const handleResponse = async (response) => {
           data
         );
       }
-      
-      return data;
+
+      // Descifrar campos sensibles de la respuesta
+      const decryptedData = decryptResponseData(data);
+      console.log('API Response data (decrypted):', decryptedData);
+
+      return decryptedData;
     }
-    
+
     if (!response.ok) {
       const text = await response.text();
       console.log('API Response text:', text);
@@ -291,7 +337,7 @@ const handleResponse = async (response) => {
         { text }
       );
     }
-    
+
     return response.text();
   } catch (error) {
     console.error('Error handling API response:', error);

@@ -1,7 +1,15 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const DEFAULT_ISSUER = 'http://localhost/proyecto-casalai-ca/';
+// Configuración JWT (debe coincidir con el servidor)
+// Para desarrollo local: http://localhost/proyecto-casalai-ca/
+// Para producción Always Data: https://casalai.alwaysdata.net/
+// NOTA: El servidor está enviando iss: "casalai-api" - Debes actualizar el servidor
+// para que use "https://casalai.alwaysdata.net/" o cambiar esto a "casalai-api"
+const DEFAULT_ISSUER = 'casalai-api'; // Coincide con lo que envía el servidor actualmente
 const DEFAULT_AUDIENCE = 'proyecto-casalai-ca';
+// NOTA: JWT_SECRET_KEY se usa en el servidor para firmar/verificar tokens
+// El cliente no necesita la secret key para decodificar el payload,
+// pero el servidor debe usar: d6e32e8d9c57eeef6fb09bebe9cb579bc75836c0d8327914bf689369d4e5f76b
 // Cambia este valor para definir el tiempo de la sesion
 const SESSION_EXPIRATION_SECONDS = 6000;
 // Cambia este valor para definir el tiempo de advertencia (en segundos)

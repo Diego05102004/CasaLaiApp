@@ -1,18 +1,76 @@
 /**
  * Configuración de la API para la aplicación móvil
- * 
+ *
  * IMPORTANTE: Cuando subas el sistema al host, actualiza la URL base
  * con la URL real de tu servidor.
+ *
+ * Para cambiar entre desarrollo y producción:
+ * - Usa EXPO_PUBLIC_API_URL en .env
+ * - O modifica src/config/envConfig.js y cambia IS_PRODUCTION a true
  */
 
 // URL base de la API. Para un dispositivo físico usa la IP LAN del PC,
 // y para el emulador Android normalmente usa 10.0.2.2 en lugar de localhost.
+// Para producción con Always Data, usa HTTPS.
 export const API_BASE_URL = (
   process.env.EXPO_PUBLIC_API_URL ||
-  'http://proyecto-casalai-ca/api'
+  'https://casalai.alwaysdata.net/api'
 ).replace(/\/+$/, '');
 
-const PROJECT_SERVER_ROOT = 'C:/xampp/htdocs/proyecto-casalai-ca';
+export const buildProductImageUrl = (imageValue) => {
+  if (!imageValue) {
+    return null;
+  }
+
+  const value = String(imageValue).trim().replace(/\\/g, '/');
+  if (!value) {
+    return null;
+  }
+
+  if (/^data:/i.test(value)) {
+    return value;
+  }
+
+  const serverRoot = API_BASE_URL.replace(/\/api\/?$/i, '');
+  const productImagesPath = value.match(/(?:^|\/)assets\/img\/productos\/(.+)$/i);
+
+  if (!productImagesPath) {
+    if (/^https?:\/\//i.test(value)) {
+      return value.replace(/^https?:\/\/localhost(?::\d+)?/i, serverRoot);
+    }
+
+    return `${serverRoot}/assets/img/productos/${value
+      .replace(/^\.?\//, '')
+      .split('/')
+      .map(encodeURIComponent)
+      .join('/')}`;
+  }
+
+  const imagePath = productImagesPath[1]
+    .split('/')
+    .map(encodeURIComponent)
+    .join('/');
+  const assetPathIndex = value.toLowerCase().lastIndexOf('/assets/img/productos/');
+  const urlPrefix = value.slice(0, assetPathIndex);
+  const externalOrigin = urlPrefix.match(/^(https?:\/\/[^/]+)/i)?.[1];
+  const pathPrefix = externalOrigin ? urlPrefix.slice(externalOrigin.length) : '';
+  const uniquePathSegments = pathPrefix
+    .split('/')
+    .filter(Boolean)
+    .filter((segment, index, segments) => (
+      index === 0 || segment.toLowerCase() !== segments[index - 1].toLowerCase()
+    ));
+  const imageRoot = externalOrigin
+    ? `${externalOrigin}${uniquePathSegments.length ? `/${uniquePathSegments.join('/')}` : ''}`
+    : serverRoot;
+
+  return `${imageRoot}/assets/img/productos/${imagePath}`;
+};
+
+// Ruta del servidor - Usar siempre HTTPS en producción
+// Para desarrollo local: C:/xampp/htdocs/proyecto-casalai-ca
+// Para producción Always Data: Usar rutas del servidor de Always Data
+const PROJECT_SERVER_ROOT = 'C:/xampp/htdocs/proyecto-casalai-ca'; // Solo para desarrollo local
 
 // Ruta real del servidor donde PHP debe guardar la imagen.
 // IMPORTANTE: esto NO es una URL para el navegador; es una ruta del sistema de archivos.
@@ -21,14 +79,14 @@ export const PROFILE_IMAGE_STORAGE_PATH = `${PROJECT_SERVER_ROOT}/assets/img/upl
 
 // URL pública para acceder a la imagen desde la app.
 // Esta URL sí se usa para leer la imagen desde el navegador o desde React Native.
-export const PROFILE_IMAGE_PUBLIC_URL = 'http://proyecto-casalai-ca/assets/img/uploads/';
+export const PROFILE_IMAGE_PUBLIC_URL = 'https://casalai.alwaysdata.net/assets/img/uploads/';
 
 // Ruta real del servidor donde PHP debe guardar la imagen del comprobante de pago.
 // IMPORTANTE: esto NO es una URL para el navegador; es una ruta del sistema de archivos.
 export const PAGOS_IMAGE_STORAGE_PATH = `${PROJECT_SERVER_ROOT}/assets/img/uploads/comprobantes/`;
 
 // URL pública para acceder a la imagen del comprobante desde la app.
-export const PAGOS_IMAGE_PUBLIC_URL = 'http://proyecto-casalai-ca/assets/img/uploads/comprobantes/';
+export const PAGOS_IMAGE_PUBLIC_URL = 'https://casalai.alwaysdata.net/assets/img/uploads/comprobantes/';
 
 // Normaliza una ruta de imagen para que funcione tanto con rutas relativas del servidor,
 // rutas absolutas del sistema de archivos, como con URLs completas ya resueltas.
