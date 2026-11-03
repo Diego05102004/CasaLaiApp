@@ -5,6 +5,7 @@ import { calculateStockUsed } from '../utils/cart';
 import COLORS from '../constants/colors';
 import theme from '../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
+import { buildProductImageUrl } from '../config/apiConfig';
 
 const defaultImage = require('../assets/images/producto-default.jpg');
 
@@ -53,8 +54,13 @@ const ComboCard = ({ combo, onPress, onAddToCart }) => {
     ));
   }, [comboId, availableComboQuantity]);
 
-  const getItemImage = (item) => item?.imageSource || (item?.imagen || item?.image ? { uri: item.imagen || item.image } : defaultImage);
-  const imageSource = combo?.imageSource || (combo?.image ? { uri: combo.image } : getItemImage(items[0]));
+  const getItemImage = (item) => {
+    if (item?.imageSource) return item.imageSource;
+    const imageUrl = buildProductImageUrl(item?.imagen || item?.image);
+    return imageUrl ? { uri: imageUrl } : defaultImage;
+  };
+  const comboImageUrl = buildProductImageUrl(combo?.imagen || combo?.image);
+  const imageSource = combo?.imageSource || (comboImageUrl ? { uri: comboImageUrl } : getItemImage(items[0]));
 
   const handleAddToCart = async () => {
     if (onAddToCart) {

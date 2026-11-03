@@ -69,7 +69,6 @@ class ComunicadorAPI {
         apiFile,
         functionName,
         method: operation.method,
-        requestData,
       });
 
       switch (operation.method) {

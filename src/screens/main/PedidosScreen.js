@@ -17,7 +17,6 @@ import COLORS from '../../constants/colors';
 import { API_BASE_URL } from '../../config/apiConfig';
 import { InvocarMetodo } from '../../utils/comunicadorApi';
 import ConfirmModal from '../../components/common/ConfirmModal';
-import { encryption } from '../../utils/encryption';
 import {
   setPedidos,
   setLoading,
@@ -94,12 +93,6 @@ const extractPedidosDesdeHtml = (html = '') => {
     const telefonoStripped = stripHtml(telefono).trim() || '';
     const direccionStripped = stripHtml(direccion).trim() || '';
 
-    // Desencriptar datos si están encriptados (texto largo > 50 caracteres es señal de encriptación)
-    const clienteDesencriptado = clienteStripped.length > 50 ? encryption.decrypt(clienteStripped) : clienteStripped;
-    const cedulaDesencriptada = cedulaStripped.length > 50 ? encryption.decrypt(cedulaStripped) : cedulaStripped;
-    const telefonoDesencriptado = telefonoStripped.length > 50 ? encryption.decrypt(telefonoStripped) : telefonoStripped;
-    const direccionDesencriptada = direccionStripped.length > 50 ? encryption.decrypt(direccionStripped) : direccionStripped;
-
     const pedido = {
       id_factura: Number(idFactura),
       numero_factura: `#${idFactura}`,
@@ -107,10 +100,10 @@ const extractPedidosDesdeHtml = (html = '') => {
       total: Number(String(total).replace('.', '').replace(',', '.').trim() || 0),
       estado: stripHtml(estatusSpan || estatusPlain || 'Borrador').trim() || 'Borrador',
       metodo: 'Sin método',
-      cliente: clienteDesencriptado,
-      cedula: cedulaDesencriptada,
-      telefono: telefonoDesencriptado,
-      direccion: direccionDesencriptada,
+      cliente: clienteStripped,
+      cedula: cedulaStripped,
+      telefono: telefonoStripped,
+      direccion: direccionStripped,
       descuento: stripHtml(descuento).trim() || '0%',
     };
 
@@ -127,40 +120,26 @@ const normalizePedido = (item = {}) => {
 
   const estado = item.estado ?? item.status ?? item.estatus ?? 'Borrador';
 
-  // Desencriptar datos del cliente (solo una vez)
   let clienteNombre = 'Cliente';
   let clienteDetalle = {};
-  let clienteDesencriptado = item.cliente;
+  const clienteOriginal = item.cliente;
 
-  // Si ya viene desencriptado de cargarPedidos, usarlo directamente
   if (item.cliente_detalle && typeof item.cliente_detalle === 'object') {
-    // Verificar si ya está desencriptado (no es texto largo encriptado)
     const nombre = item.cliente_detalle.nombre || '';
     const cedula = item.cliente_detalle.cedula || '';
     const telefono = item.cliente_detalle.telefono || '';
     const direccion = item.cliente_detalle.direccion || '';
 
-    clienteDetalle = {
-      nombre: typeof nombre === 'string' && nombre.length > 50 ? encryption.decrypt(nombre) : nombre,
-      cedula: typeof cedula === 'string' && cedula.length > 50 ? encryption.decrypt(cedula) : cedula,
-      telefono: typeof telefono === 'string' && telefono.length > 50 ? encryption.decrypt(telefono) : telefono,
-      direccion: typeof direccion === 'string' && direccion.length > 50 ? encryption.decrypt(direccion) : direccion,
-    };
-
+    clienteDetalle = { nombre, cedula, telefono, direccion };
     clienteNombre = clienteDetalle.nombre || 'Cliente';
   } else if (item.cliente && typeof item.cliente === 'object') {
-    clienteNombre = encryption.decrypt(item.cliente.nombre ?? 'Cliente');
+    clienteNombre = item.cliente.nombre ?? 'Cliente';
   } else if (typeof item.cliente === 'string') {
-    if (item.cliente.length > 50) {
-      clienteNombre = encryption.decrypt(item.cliente);
-      clienteDesencriptado = clienteNombre;
-    } else {
-      clienteNombre = item.cliente;
-    }
+    clienteNombre = item.cliente;
   } else if (item.nombre_cliente) {
-    clienteNombre = encryption.decrypt(item.nombre_cliente);
+    clienteNombre = item.nombre_cliente;
   } else if (item.nombre) {
-    clienteNombre = encryption.decrypt(item.nombre);
+    clienteNombre = item.nombre;
   }
 
   return {
@@ -172,7 +151,7 @@ const normalizePedido = (item = {}) => {
     metodo: item.metodo_pago ?? item.forma_pago ?? item.metodo ?? 'Sin método',
     cliente: clienteNombre,
     clienteDetalle,
-    clienteOriginal: clienteDesencriptado,
+    clienteOriginal,
     items: Array.isArray(item.items) ? item.items : (Array.isArray(item.detalles) ? item.detalles : []),
     acciones: item.acciones ?? {
       pagar: String(estado).toLowerCase().includes('borrador'),
@@ -380,34 +359,7 @@ const PedidosScreen = () => {
         }
       }
 
-      // Desencriptar datos de las facturas antes de normalizar (solo una vez)
-      const decryptedList = sourceList.map((factura) => {
-        if (!factura || typeof factura !== 'object') {
-          return factura;
-        }
-
-        const decryptedFactura = { ...factura };
-
-        // Desencriptar campo cliente si es string largo
-        if (typeof decryptedFactura.cliente === 'string' && decryptedFactura.cliente.length > 50) {
-          decryptedFactura.cliente = encryption.decrypt(decryptedFactura.cliente);
-        }
-
-        // Desencriptar cliente_detalle si existe
-        if (decryptedFactura.cliente_detalle && typeof decryptedFactura.cliente_detalle === 'object') {
-          decryptedFactura.cliente_detalle = {
-            ...decryptedFactura.cliente_detalle,
-            nombre: encryption.decrypt(decryptedFactura.cliente_detalle.nombre || ''),
-            cedula: encryption.decrypt(decryptedFactura.cliente_detalle.cedula || ''),
-            telefono: encryption.decrypt(decryptedFactura.cliente_detalle.telefono || ''),
-            direccion: encryption.decrypt(decryptedFactura.cliente_detalle.direccion || ''),
-          };
-        }
-
-        return decryptedFactura;
-      });
-
-      const normalized = decryptedList
+      const normalized = sourceList
         .map(normalizePedido)
         .filter(Boolean);
 

@@ -94,16 +94,12 @@ const prepareAPIData = (data, schema = null, encryptSensitive = true) => {
   }
 
   let sanitizedData = sanitizeForAPI(data, schema);
-  console.log('[API] Datos antes de cifrado:', JSON.stringify(sanitizedData));
 
   // Encriptar campos sensibles si se solicita
   if (encryptSensitive) {
     const fieldsToEncrypt = getFieldsToEncrypt(sanitizedData);
-    console.log('[API] Campos a cifrar:', fieldsToEncrypt);
     if (fieldsToEncrypt.length > 0) {
-      console.log('[API] Encriptando campos sensibles:', fieldsToEncrypt);
       sanitizedData = encryption.encryptArray(sanitizedData, fieldsToEncrypt);
-      console.log('[API] Datos después de cifrado:', JSON.stringify(sanitizedData));
     }
   }
 
@@ -160,7 +156,6 @@ export const securePost = async (endpoint, data = {}, schema = null, requestTime
     console.log('API POST Request:', {
       url,
       endpoint,
-      data: sanitizedData,
       baseURL: API_CONFIG.baseURL,
       encrypted: encryptSensitive
     });
@@ -255,48 +250,6 @@ export const secureDelete = async (endpoint, params = {}, schema = null) => {
 };
 
 /**
- * Descifra campos sensibles de la respuesta de la API
- * @param {Object} data - Datos a descifrar
- * @returns {Object} - Datos con campos descifrados
- */
-const decryptResponseData = (data) => {
-  if (!data || typeof data !== 'object') {
-    return data;
-  }
-
-  try {
-    // Si es un array, procesar cada elemento
-    if (Array.isArray(data)) {
-      return data.map(item => decryptResponseData(item));
-    }
-
-    // Si es un objeto, descifrar campos sensibles
-    const fieldsToDecrypt = getFieldsToEncrypt(data);
-    
-    if (fieldsToDecrypt.length > 0) {
-      console.log('[API] Descifrando campos sensibles de la respuesta:', fieldsToDecrypt);
-      const decrypted = encryption.decryptArray(data, fieldsToDecrypt);
-      console.log('[API] Datos descifrados exitosamente');
-      return decrypted;
-    }
-
-    // Recursivamente procesar objetos anidados
-    const result = { ...data };
-    for (const key in result) {
-      if (typeof result[key] === 'object' && result[key] !== null) {
-        result[key] = decryptResponseData(result[key]);
-      }
-    }
-
-    return result;
-  } catch (error) {
-    console.error('[API] Error descifrando datos de respuesta:', error);
-    // En caso de error, retornar datos originales
-    return data;
-  }
-};
-
-/**
  * Maneja la respuesta de la API
  * @param {Response} response - Respuesta de fetch
  * @returns {Promise} - Datos de la respuesta
@@ -311,7 +264,6 @@ const handleResponse = async (response) => {
 
     if (contentType && contentType.includes('application/json')) {
       const data = await response.json();
-      console.log('API Response data (raw):', data);
 
       if (!response.ok) {
         throw new APIError(
@@ -321,11 +273,7 @@ const handleResponse = async (response) => {
         );
       }
 
-      // Descifrar campos sensibles de la respuesta
-      const decryptedData = decryptResponseData(data);
-      console.log('API Response data (decrypted):', decryptedData);
-
-      return decryptedData;
+      return data;
     }
 
     if (!response.ok) {

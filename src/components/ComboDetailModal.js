@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import COLORS from '../constants/colors';
 import { useCart } from '../hooks/useCart';
 import { calculateStockUsed } from '../utils/cart';
+import { buildProductImageUrl } from '../config/apiConfig';
 
 const { height } = Dimensions.get('window');
 const defaultImage = require('../assets/images/producto-default.jpg');
@@ -80,15 +81,17 @@ const ComboDetailModal = ({ visible, combo, onClose, onAddToCart }) => {
     if (item?.imageSource) return item.imageSource;
     const img = item?.imagen || item?.image || item?.imagen_url;
     if (img) {
-      return typeof img === 'string' ? { uri: img } : img;
+      const imageUrl = buildProductImageUrl(img);
+      return imageUrl ? { uri: imageUrl } : defaultImage;
     }
     return defaultImage;
   };
 
   // Resolver la imagen principal del combo
+  const comboImageUrl = buildProductImageUrl(combo?.image || combo?.imagen);
   const comboImage = combo?.imageSource ||
-    (combo?.image || combo?.imagen
-      ? { uri: combo.image || combo.imagen }
+    (comboImageUrl
+      ? { uri: comboImageUrl }
       : getItemImage(includedItems[0]));
 
   // Precio final

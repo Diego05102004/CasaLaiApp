@@ -145,7 +145,6 @@ const LoginScreen = ({ navigation }) => {
     setDebugData({
       timestamp: new Date().toISOString(),
       apiURL: `${API_BASE_URL}/login.php`,
-      requestData: loginData,
       requestType: 'USERNAME_LOGIN'
     });
 

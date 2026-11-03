@@ -10,14 +10,17 @@ import {
   TouchableWithoutFeedback,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
+import { API_BASE_URL } from '../config/apiConfig';
 
-const RECAPTCHA_SITE_KEY = process.env.EXPO_PUBLIC_RECAPTCHA_SITE_KEY || '';
-const DOMAIN = process.env.EXPO_PUBLIC_RECAPTCHA_DOMAIN || 'http://localhost';
+const DOMAIN = process.env.EXPO_PUBLIC_RECAPTCHA_DOMAIN || 'casalai.alwaysdata.net';
+const CAPTCHA_BASE_URL = /^https?:\/\//i.test(DOMAIN) ? DOMAIN : `https://${DOMAIN}`;
 
 const ReCaptcha = forwardRef(({ onVerify, onError }, ref) => {
   const [modalVisible, setModalVisible] = useState(false);
   const [verified, setVerified] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [siteKey, setSiteKey] = useState('');
+  const [configurationError, setConfigurationError] = useState('');
 
   const webContainerRef = useRef(null);
   const webViewRef = useRef(null);
@@ -29,6 +32,42 @@ const ReCaptcha = forwardRef(({ onVerify, onError }, ref) => {
     onVerifyRef.current = onVerify;
     onErrorRef.current = onError;
   }, [onError, onVerify]);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadSiteKey = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/recaptcha_config.php`, {
+          headers: { Accept: 'application/json' },
+        });
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result?.message || 'No se pudo cargar la configuración de reCAPTCHA.');
+        }
+
+        if (typeof result?.site_key !== 'string' || !result.site_key.trim()) {
+          throw new Error('El servidor no devolvió una site key de reCAPTCHA válida.');
+        }
+
+        if (active) {
+          setSiteKey(result.site_key.trim());
+        }
+      } catch (error) {
+        console.error('[reCAPTCHA] No se pudo cargar la configuración:', error.message);
+        if (active) {
+          setConfigurationError('No se pudo cargar la configuración de reCAPTCHA.');
+          onErrorRef.current?.();
+        }
+      }
+    };
+
+    loadSiteKey();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useImperativeHandle(ref, () => ({
     reset: () => {
@@ -43,7 +82,7 @@ const ReCaptcha = forwardRef(({ onVerify, onError }, ref) => {
   }), []);
 
   useEffect(() => {
-    if (Platform.OS !== 'web' || !webContainerRef.current || !RECAPTCHA_SITE_KEY) {
+    if (Platform.OS !== 'web' || !webContainerRef.current || !siteKey) {
       return undefined;
     }
 
@@ -57,7 +96,7 @@ const ReCaptcha = forwardRef(({ onVerify, onError }, ref) => {
       if (!window.grecaptcha || !captchaElement.isConnected) return;
 
       webWidgetIdRef.current = window.grecaptcha.render(captchaElement, {
-        sitekey: RECAPTCHA_SITE_KEY,
+        sitekey: siteKey,
         callback: (token) => {
           setVerified(true);
           onVerifyRef.current(token);
@@ -82,20 +121,24 @@ const ReCaptcha = forwardRef(({ onVerify, onError }, ref) => {
       script.async = true;
       script.defer = true;
       script.onload = () => window.grecaptcha?.ready(renderCaptcha);
+      script.onerror = () => {
+        setConfigurationError('No se pudo cargar el servicio de reCAPTCHA de Google.');
+        onErrorRef.current?.();
+      };
       document.head.appendChild(script);
     }
 
     return () => {
       captchaElement.remove();
     };
-  }, []);
+  }, [siteKey]);
 
   if (Platform.OS === 'web') {
     return (
       <View style={[styles.container, styles.webContainer]} ref={webContainerRef}>
-        {!RECAPTCHA_SITE_KEY && (
+        {!siteKey && (
           <Text style={styles.configurationText}>
-            Configura EXPO_PUBLIC_RECAPTCHA_SITE_KEY para activar reCAPTCHA.
+            {configurationError || 'Cargando reCAPTCHA...'}
           </Text>
         )}
       </View>
@@ -122,7 +165,7 @@ const ReCaptcha = forwardRef(({ onVerify, onError }, ref) => {
       </head>
       <body>
         <div class="g-recaptcha"
-             data-sitekey="${RECAPTCHA_SITE_KEY}"
+             data-sitekey="${siteKey}"
              data-callback="onSuccess"
              data-expired-callback="onExpired"
              data-error-callback="onError">
@@ -166,9 +209,9 @@ const ReCaptcha = forwardRef(({ onVerify, onError }, ref) => {
 
   return (
     <View style={styles.container}>
-      {!RECAPTCHA_SITE_KEY ? (
+      {!siteKey ? (
         <Text style={styles.configurationText}>
-          Configura EXPO_PUBLIC_RECAPTCHA_SITE_KEY para activar reCAPTCHA.
+          {configurationError || 'Cargando reCAPTCHA...'}
         </Text>
       ) : (
         <>
@@ -213,7 +256,7 @@ const ReCaptcha = forwardRef(({ onVerify, onError }, ref) => {
                   <WebView
                     ref={webViewRef}
                     originWhitelist={['*']}
-                    source={{ html: htmlContent, baseUrl: DOMAIN }}
+                    source={{ html: htmlContent, baseUrl: CAPTCHA_BASE_URL }}
                     onMessage={handleMessage}
                     onLoadEnd={() => setLoading(false)}
                     style={styles.webview}

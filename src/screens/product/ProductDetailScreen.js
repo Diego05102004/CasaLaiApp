@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  Image, 
-  ScrollView, 
-  TouchableOpacity, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  Image,
+  ScrollView,
+  TouchableOpacity,
   Dimensions,
   FlatList,
   Alert,
@@ -18,6 +18,7 @@ import theme from '../../constants/theme';
 import ScreenWithHeader from '../../components/common/ScreenWithHeader';
 import ProductCard from '../../components/ProductCard';
 import { Ionicons } from '@expo/vector-icons';
+import { buildProductImageUrl } from '../../config/apiConfig';
 
 const { width } = Dimensions.get('window');
 
@@ -101,8 +102,8 @@ const ProductDetailScreen = ({ route, navigation }) => {
       <ScrollView style={styles.container}>
         {/* Imagen del producto */}
         <View style={styles.imageContainer}>
-          <Image 
-            source={product.image ? { uri: product.image } : require('../../assets/images/producto-default.jpg')}
+          <Image
+            source={buildProductImageUrl(product.image) ? { uri: buildProductImageUrl(product.image) } : require('../../assets/images/producto-default.jpg')}
             style={styles.productImage}
             resizeMode="contain"
           />

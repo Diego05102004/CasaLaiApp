@@ -5,6 +5,7 @@ import { calculateStockUsed } from '../utils/cart';
 import COLORS from '../constants/colors';
 import theme from '../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
+import { buildProductImageUrl } from '../config/apiConfig';
 
 const getProductImage = (imageName) => {
   const imageMap = {
@@ -42,8 +43,9 @@ const ProductCard = ({ product, onPress, onAddToCart }) => {
       return;
     }
 
-    const imageToUse = product?.imageSource || 
-                      (product?.image ? { uri: product.image } : require('../assets/images/producto-default.jpg'));
+    const imageUrl = buildProductImageUrl(product?.image);
+    const imageToUse = product?.imageSource ||
+                      (imageUrl ? { uri: imageUrl } : require('../assets/images/producto-default.jpg'));
     
     try {
       await addItem({
@@ -63,8 +65,9 @@ const ProductCard = ({ product, onPress, onAddToCart }) => {
     }
   };
 
-  const imageSource = product?.imageSource || 
-    (typeof product?.image === 'string' ? { uri: product.image } : getProductImage(product?.image));
+  const imageUrl = buildProductImageUrl(product?.image);
+  const imageSource = product?.imageSource ||
+    (imageUrl ? { uri: imageUrl } : getProductImage(product?.image));
 
   return (
     <View style={styles.card}>

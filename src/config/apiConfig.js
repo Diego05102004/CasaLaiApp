@@ -32,13 +32,23 @@ export const buildProductImageUrl = (imageValue) => {
   }
 
   const serverRoot = API_BASE_URL.replace(/\/api\/?$/i, '');
+
+  // Si la URL ya contiene localhost/proyecto-casalai-ca, reemplazarla completamente
+  if (value.includes('localhost/proyecto-casalai-ca')) {
+    const imagePath = value.replace(/^.*?\/assets\/img\/productos\//i, '');
+    return `${serverRoot}/assets/img/productos/${imagePath}`;
+  }
+
+  // Si es una URL HTTP/HTTPS, reemplazar el dominio
+  if (/^https?:\/\//i.test(value)) {
+    return value
+      .replace(/^https?:\/\/localhost\/proyecto-casalai-ca/i, serverRoot)
+      .replace(/^https?:\/\/localhost(?::\d+)?/i, serverRoot);
+  }
+
   const productImagesPath = value.match(/(?:^|\/)assets\/img\/productos\/(.+)$/i);
 
   if (!productImagesPath) {
-    if (/^https?:\/\//i.test(value)) {
-      return value.replace(/^https?:\/\/localhost(?::\d+)?/i, serverRoot);
-    }
-
     return `${serverRoot}/assets/img/productos/${value
       .replace(/^\.?\//, '')
       .split('/')
@@ -63,6 +73,11 @@ export const buildProductImageUrl = (imageValue) => {
   const imageRoot = externalOrigin
     ? `${externalOrigin}${uniquePathSegments.length ? `/${uniquePathSegments.join('/')}` : ''}`
     : serverRoot;
+
+  // Si el origen es localhost/proyecto-casalai-ca, reemplazarlo
+  if (externalOrigin && externalOrigin.includes('localhost')) {
+    return `${serverRoot}/assets/img/productos/${imagePath}`;
+  }
 
   return `${imageRoot}/assets/img/productos/${imagePath}`;
 };

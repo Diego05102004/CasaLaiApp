@@ -15,6 +15,7 @@ import COLORS from '../../constants/colors';
 import theme from '../../constants/theme';
 import { useProducts } from '../../hooks/useProducts';
 import { Ionicons } from '@expo/vector-icons';
+import { buildProductImageUrl } from '../../config/apiConfig';
 
 const { width } = Dimensions.get('window');
 
@@ -97,7 +98,7 @@ const AmazonStyleHomeScreen = () => {
     >
       <View style={styles.categoryImageContainer}>
         {item.image ? (
-          <Image source={{ uri: item.image }} style={styles.categoryImage} resizeMode="cover" />
+          <Image source={buildProductImageUrl(item.image) ? { uri: buildProductImageUrl(item.image) } : null} style={styles.categoryImage} resizeMode="cover" />
         ) : (
           <View style={styles.categoryImagePlaceholder}>
             <Ionicons name="pricetag" size={40} color={COLORS.primary} />
@@ -118,7 +119,7 @@ const AmazonStyleHomeScreen = () => {
     >
       <View style={styles.featuredImageContainer}>
         {item.image ? (
-          <Image source={{ uri: item.image }} style={styles.featuredImage} resizeMode="cover" />
+          <Image source={buildProductImageUrl(item.image) ? { uri: buildProductImageUrl(item.image) } : null} style={styles.featuredImage} resizeMode="cover" />
         ) : (
           <View style={styles.featuredImagePlaceholder}>
             <Ionicons name="grid" size={50} color={COLORS.primary} />

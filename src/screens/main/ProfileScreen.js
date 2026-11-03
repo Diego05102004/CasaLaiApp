@@ -83,60 +83,6 @@ const ProfileScreen = () => {
   const [currentPasswordForProfile, setCurrentPasswordForProfile] = useState('');
   const [currentPasswordForAvatar, setCurrentPasswordForAvatar] = useState('');
 
-  const decryptProfileValue = (value) => {
-    if (typeof value !== 'string') {
-      return value;
-    }
-
-    const trimmed = value.trim();
-    if (!trimmed) {
-      return value;
-    }
-
-    if (trimmed.length <= 50) {
-      return trimmed;
-    }
-
-    try {
-      const decrypted = encryption.decrypt(trimmed);
-      return typeof decrypted === 'string' && decrypted.trim() ? decrypted : trimmed;
-    } catch (error) {
-      console.warn('[ProfileScreen] No se pudo descifrar valor del perfil:', error?.message || error);
-      return trimmed;
-    }
-  };
-
-  const decryptProfileData = (profileData = {}) => {
-    if (!profileData || typeof profileData !== 'object') {
-      return profileData;
-    }
-
-    const decryptedProfile = { ...profileData };
-    const keysToDecrypt = [
-      'username',
-      'nombre_usuario',
-      'nombres',
-      'nombre',
-      'apellidos',
-      'apellido',
-      'telefono',
-      'phone',
-      'correo',
-      'email',
-      'cedula',
-      'cedula_usuario',
-      'documento',
-    ];
-
-    keysToDecrypt.forEach((key) => {
-      if (Object.prototype.hasOwnProperty.call(decryptedProfile, key) && typeof decryptedProfile[key] === 'string') {
-        decryptedProfile[key] = decryptProfileValue(decryptedProfile[key]);
-      }
-    });
-
-    return decryptedProfile;
-  };
-
   useEffect(() => {
     if (user?.foto_perfil) {
       // La imagen puede venir guardada como ruta relativa/relativa al servidor o como URL completa.
@@ -157,7 +103,7 @@ const ProfileScreen = () => {
         const response = await InvocarMetodo('perfil.php', 'default', { id_usuario: userId });
         const result = response?.data ?? response;
         const rawProfileData = result?.usuario || result?.user || result || {};
-        const profileData = decryptProfileData(rawProfileData);
+        const profileData = rawProfileData;
 
         if (profileData && Object.keys(profileData).length > 0) {
           const nextUser = {

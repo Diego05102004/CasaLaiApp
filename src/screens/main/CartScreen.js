@@ -8,6 +8,7 @@ import COLORS from '../../constants/colors';
 import theme from '../../constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { encryption } from '../../utils/encryption';
+import { buildProductImageUrl } from '../../config/apiConfig';
 
 const getOrderProducts = (cartItems) => {
   const productsById = new Map();
@@ -207,7 +208,7 @@ const CartScreen = () => {
     try {
       setIsCreatingOrder(true);
 
-      const apiUrl = 'http://localhost/proyecto-casalai-ca/api/gestionarFactura.php';
+      const apiUrl = 'https://casalai.alwaysdata.net/api/gestionarFactura.php';
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
@@ -285,9 +286,8 @@ const CartScreen = () => {
 
   const renderItem = ({ item }) => {
     const imageValue = item.image || item.imageUrl;
-    const imageSource = typeof imageValue === 'string'
-      ? { uri: imageValue }
-      : imageValue || null;
+    const imageUrl = buildProductImageUrl(imageValue);
+    const imageSource = imageUrl ? { uri: imageUrl } : (typeof imageValue === 'object' ? imageValue : null);
     
     return (
       <View style={styles.cartItem}>
